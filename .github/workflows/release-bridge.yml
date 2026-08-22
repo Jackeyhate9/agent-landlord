@@ -1,0 +1,43 @@
+name: Bridge Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  packages: write
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - {goos: windows, goarch: amd64, output: arena-bridge-windows-amd64.exe, alias: arena-bridge-windows.exe}
+          - {goos: linux, goarch: amd64, output: arena-bridge-linux-amd64, alias: arena-bridge-linux}
+          - {goos: darwin, goarch: arm64, output: arena-bridge-darwin-arm64, alias: arena-bridge-macos}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version: "1.23"}
+      - run: go build -buildvcs=false -trimpath -ldflags="-s -w" -o ../${{ matrix.output }} ./cmd/arena-bridge
+        working-directory: bridge
+        env: {GOOS: "${{ matrix.goos }}", GOARCH: "${{ matrix.goarch }}", CGO_ENABLED: "0"}
+      - run: cp ../${{ matrix.output }} ../${{ matrix.alias }}
+        working-directory: bridge
+      - uses: softprops/action-gh-release@v2
+        with: {files: |
+            ${{ matrix.output }}
+            ${{ matrix.alias }}
+          }
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+      - uses: docker/build-push-action@v6
+        with:
+          context: bridge
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/agent-landlord-bridge:${{ github.ref_name }}
+            ghcr.io/${{ github.repository_owner }}/agent-landlord-bridge:latest

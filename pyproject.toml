@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-landlord"
+version = "0.1.0"
+description = "Bring Your Own Agent. Let It Play."
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+dependencies = [
+  "fastapi>=0.116,<1",
+  "uvicorn[standard]>=0.35,<1",
+  "pydantic-settings>=2.10,<3",
+  "cryptography>=44,<51",
+  "python-multipart>=0.0.20,<1",
+  "redis>=6,<7",
+  "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.4,<9", "pytest-asyncio>=1,<2", "httpx>=0.28,<1"]
+
+[tool.setuptools.packages.find]
+include = ["server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentlandlord.local/schema/observation.v1.json",
+  "title": "Agent Landlord Observation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "game_id", "turn_id", "seat", "hand", "landlord_cards_public", "action_history", "remaining_card_counts", "legal_actions", "base_stake", "current_multiplier", "arena_token_balance", "decision_timeout_ms"],
+  "$defs": {
+    "roleSeat": {"enum": ["landlord", "farmer_left", "farmer_right"]},
+    "biddingSeat": {"enum": ["seat_0", "seat_1", "seat_2"]},
+    "roleCounts": {
+      "type": "object",
+      "required": ["landlord", "farmer_left", "farmer_right"],
+      "additionalProperties": false,
+      "properties": {"landlord": {"type": "integer", "minimum": 0}, "farmer_left": {"type": "integer", "minimum": 0}, "farmer_right": {"type": "integer", "minimum": 0}}
+    },
+    "biddingCounts": {
+      "type": "object",
+      "required": ["seat_0", "seat_1", "seat_2"],
+      "additionalProperties": false,
+      "properties": {"seat_0": {"type": "integer", "minimum": 0}, "seat_1": {"type": "integer", "minimum": 0}, "seat_2": {"type": "integer", "minimum": 0}}
+    }
+  },
+  "properties": {
+    "protocol_version": {"const": 1},
+    "game_id": {"type": "string", "minLength": 1},
+    "turn_id": {"type": "string", "minLength": 1},
+    "phase": {"enum": ["bidding", "playing", "finished"]},
+    "seat": {"oneOf": [{"$ref": "#/$defs/roleSeat"}, {"$ref": "#/$defs/biddingSeat"}]},
+    "seat_index": {"type": "integer", "minimum": 0, "maximum": 2},
+    "hand": {"type": "array", "items": {"type": "string"}},
+    "landlord_cards_public": {"type": "array", "items": {"type": "string"}},
+    "last_action": {"type": ["object", "null"]},
+    "action_history": {"type": "array", "items": {"type": "object"}},
+    "remaining_card_counts": {"oneOf": [{"$ref": "#/$defs/roleCounts"}, {"$ref": "#/$defs/biddingCounts"}]},
+    "legal_actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "cards"],
+        "properties": {"id": {"type": "integer"}, "cards": {"type": "array", "items": {"type": "string"}}, "type": {"type": "string"}, "bid": {"type": "integer", "minimum": 0, "maximum": 3}}
+      }
+    },
+    "base_stake": {"type": "integer", "minimum": 0},
+    "current_multiplier": {"type": "integer", "minimum": 1},
+    "arena_token_balance": {"type": "integer", "minimum": 0},
+    "decision_timeout_ms": {"type": "integer", "minimum": 1}
+  },
+  "allOf": [
+    {"if": {"required": ["phase"], "properties": {"phase": {"const": "bidding"}}}, "then": {"properties": {"seat": {"$ref": "#/$defs/biddingSeat"}, "remaining_card_counts": {"$ref": "#/$defs/biddingCounts"}}}},
+    {"if": {"required": ["phase"], "properties": {"phase": {"enum": ["playing", "finished"]}}}, "then": {"properties": {"seat": {"$ref": "#/$defs/roleSeat"}, "remaining_card_counts": {"$ref": "#/$defs/roleCounts"}}}}
+  ]
+}

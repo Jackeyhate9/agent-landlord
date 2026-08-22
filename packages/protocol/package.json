@@ -1,0 +1,1 @@
+{"name":"@agent-landlord/protocol","version":"0.1.0","private":true,"type":"module","exports":{"./v1":"./src/v1.ts","./schema/observation":"./schema/observation.v1.schema.json","./schema/action":"./schema/action.v1.schema.json"}}

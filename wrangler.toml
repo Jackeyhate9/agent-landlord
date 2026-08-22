@@ -1,0 +1,12 @@
+# Cloudflare Pages — agent-landlord web (将 apps/web/dist 部署为 Pages)
+name = "agent-landlord"
+compatibility_date = "2024-01-01"
+
+# Pages 模式：此文件仅用于 `wrangler pages deploy` 的文档提示
+# 实际部署推荐方式 A：Cloudflare Dashboard → Pages → Create → Connect to Git → Build: npm run build (apps/web) / Output: dist
+# 实际部署推荐方式 B：wrangler pages deploy apps/web/dist --project-name=agent-landlord
+# 环境变量在 Pages → Settings → Environment variables 中设置：VITE_API_URL, VITE_WS_URL
+
+[vars]
+# 示例：VITE_API_URL = "https://api.example.com"
+# 示例：VITE_WS_URL  = "wss://api.example.com"

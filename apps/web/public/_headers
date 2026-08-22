@@ -1,0 +1,5 @@
+/*
+  X-Frame-Options: ALLOWALL
+  Content-Security-Policy: frame-ancestors *
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
