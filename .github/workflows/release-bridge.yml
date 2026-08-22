@@ -2,6 +2,7 @@ name: Bridge Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 permissions:
   contents: write
   packages: write
