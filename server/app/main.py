@@ -31,7 +31,7 @@ from .matches import MatchService
 class AppState:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.store = Store(settings.sqlite_path)
+        self.store = Store(settings.sqlite_path, settings.postgres_url)
         self.join = JoinService(self.store, settings)
         self.arena = ArenaService(self.store, settings)
         self.tokens = TokenService(self.store, settings)

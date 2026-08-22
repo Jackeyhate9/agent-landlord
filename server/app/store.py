@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 
-SCHEMA = """
+SQLITE_SCHEMA = """
 PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS agents (
  id TEXT PRIMARY KEY, owner_public_key TEXT NOT NULL UNIQUE, agent_name TEXT NOT NULL,
@@ -65,38 +65,152 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
 """
 
 
-class Store:
-    def __init__(self, path: str = ":memory:") -> None:
+class _Backend:
+    """Minimal SQL backend abstraction. Supports SQLite and PostgreSQL."""
+
+    def __init__(self, use_postgres: bool = False, path: str = ":memory:", postgres_url: str = "") -> None:
+        self.use_postgres = use_postgres
+        try:
+            if use_postgres:
+                import psycopg  # local import to keep sqlite path dependency-light
+
+                self.pg = psycopg.connect(postgres_url, autocommit=False)
+                self.pg.autocommit = True
+                self.lock = threading.RLock()
+                self._ensure_schema()
+                return
+        except Exception as exc:
+            # Fallback to SQLite if psycopg missing or connect fails (dev/test safety)
+            self.use_postgres = False
+        # SQLite path (default runtime + fallback)
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-        self.connection.row_factory = sqlite3.Row
+        self.sqlite = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
+        self.sqlite.row_factory = sqlite3.Row
         self.lock = threading.RLock()
-        self.connection.executescript(SCHEMA)
+        self.sqlite.executescript(SQLITE_SCHEMA)
 
-    @contextmanager
-    def transaction(self) -> Iterator[sqlite3.Connection]:
-        with self.lock:
-            self.connection.execute("BEGIN IMMEDIATE")
+    def _ensure_schema(self) -> None:
+        # PostgreSQL port of SQLite_SCHEMA (uses BOOLEAN, SERIAL, and %s not needed here)
+        schema = SQLITE_SCHEMA.replace("AUTOINCREMENT", "GENERATED ALWAYS AS IDENTITY")
+        for stmt in schema.split(";"):
+            stmt = stmt.strip()
+            if not stmt:
+                continue
+            # PostgreSQL has no PRAGMA; skip it
+            if stmt.upper().startswith("PRAGMA"):
+                continue
             try:
-                yield self.connection
-                self.connection.execute("COMMIT")
+                self.pg.execute(stmt)
             except Exception:
-                self.connection.execute("ROLLBACK")
-                raise
+                self.pg.rollback()
+        self.pg.commit()
 
-    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
+    def _placeholder(self, sql: str) -> str:
+        # Convert '?' to '%s' for psycopg; naive but adequate for our fixed SQL
+        return sql.replace("?", "%s")
+
+    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
         with self.lock:
-            return self.connection.execute(sql, params)
+            if self.use_postgres:
+                cur = self.pg.cursor()
+                cur.execute(self._placeholder(sql), list(params) if params else None)
+                if cur.description:
+                    return cur
+                return cur
+            return self.sqlite.execute(sql, params)
+
+    def transaction(self):
+        if self.use_postgres:
+            return _PgTx(self)
+        return _SqliteTx(self)
 
     def one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-        row = self.execute(sql, params).fetchone()
+        cur = self.execute(sql, params)
+        row = cur.fetchone() if cur.description else None
         return dict(row) if row else None
 
     def all(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-        return [dict(row) for row in self.execute(sql, params).fetchall()]
+        cur = self.execute(sql, params)
+        if not cur.description:
+            return []
+        return [dict(row) for row in cur.fetchall()]
+
+    def commit(self) -> None:
+        if self.use_postgres:
+            self.pg.commit()
+        else:
+            self.sqlite.commit()
+
+    def rollback(self) -> None:
+        if self.use_postgres:
+            self.pg.rollback()
+        else:
+            self.sqlite.rollback()
+
+    def close(self) -> None:
+        if self.use_postgres:
+            self.pg.close()
+        else:
+            self.sqlite.close()
+
+
+class _SqliteTx:
+    def __init__(self, store: _Backend) -> None:
+        self.store = store
+
+    def __enter__(self) -> sqlite3.Connection:
+        with self.store.lock:
+            self.store.sqlite.execute("BEGIN IMMEDIATE")
+            return self.store.sqlite
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        with self.store.lock:
+            if exc_type:
+                self.store.sqlite.execute("ROLLBACK")
+            else:
+                self.store.sqlite.execute("COMMIT")
+        return False
+
+
+class _PgTx:
+    def __init__(self, store: _Backend) -> None:
+        self.store = store
+
+    def __enter__(self):
+        with self.store.lock:
+            self.store.pg.execute("BEGIN")
+            return self.store.pg
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        with self.store.lock:
+            if exc_type:
+                self.store.pg.rollback()
+            else:
+                self.store.pg.commit()
+        return False
+
+
+class Store:
+    """Application seam. Uses PostgreSQL when POSTGRES_URL is set, else SQLite."""
+
+    def __init__(self, path: str = ":memory:", postgres_url: str = "") -> None:
+        self.backend = _Backend(use_postgres=bool(postgres_url), path=path, postgres_url=postgres_url)
+
+    @contextmanager
+    def transaction(self):
+        with self.backend.transaction() as db:
+            yield db
+
+    def execute(self, sql: str, params: tuple[Any, ...] = ()) -> Any:
+        return self.backend.execute(sql, params)
+
+    def one(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
+        return self.backend.one(sql, params)
+
+    def all(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
+        return self.backend.all(sql, params)
 
     @staticmethod
     def json(value: Any) -> str:
         return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
-

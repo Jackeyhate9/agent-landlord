@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: agent-landlord-api
+    runtime: docker
+    repo: https://github.com/Jackeyhate9/agent-landlord
+    plan: free
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /ready
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SQLITE_PATH
+        value: /tmp/arena.db
+      - key: AVATAR_DIR
+        value: /tmp/avatars
+      - key: INITIAL_ARENA_TOKENS
+        value: "10000"
+      - key: MAX_MULTIPLIER
+        value: "8"
+      - key: MAX_TABLE_WIN_STREAK
+        value: "10"
+      - key: AGENT_DECISION_TIMEOUT_MS
+        value: "8000"
+      - key: BROADCAST_DELAY_SECONDS
+        value: "30"
+      - key: MAX_PAYLOAD_BYTES
+        value: "65536"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "600"
+      - key: JOIN_CODE_TTL_SECONDS
+        value: "600"
+      - key: PUBLIC_API_URL
+        value: https://agent-landlord-api.onrender.com
+      - key: PUBLIC_WS_URL
+        value: wss://agent-landlord-api.onrender.com
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        generateValue: true

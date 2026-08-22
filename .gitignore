@@ -20,4 +20,9 @@ apps/web/public/downloads/
 apps/web/dist/
 .idea/
 .vscode/
+.wrangler/
+apps/.wrangler/
+fly.toml
+wrangler.toml.bak
+*.js.map
 

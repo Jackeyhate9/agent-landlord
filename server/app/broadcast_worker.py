@@ -15,7 +15,7 @@ async def run() -> None:
     if not settings.redis_url:
         raise RuntimeError("REDIS_URL is required for the broadcast worker")
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
-    store = Store(settings.sqlite_path)
+    store = Store(settings.sqlite_path, settings.postgres_url)
     while True:
         rows = store.all(
             "SELECT * FROM game_events WHERE published_at IS NULL AND broadcast_at<=? ORDER BY sequence LIMIT 100", (iso(),)
