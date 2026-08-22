@@ -1,7 +1,8 @@
 name: Bridge Release
-on:
+"on":
   push:
-    tags: ["v*"]
+    tags:
+      - 'v*'
   workflow_dispatch:
 permissions:
   contents: write
