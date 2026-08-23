@@ -26,3 +26,4 @@ fly.toml
 wrangler.toml.bak
 *.js.map
 
+docs/主播机主操作手册.pdf
