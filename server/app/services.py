@@ -11,6 +11,8 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from ..protocol_constants import STAKE_TIERS
+
 from .config import Settings
 from .schemas import PublicEvent, QueueView
 from .security import opaque_id, sign_token
@@ -151,7 +153,7 @@ class TokenService:
             raise ValueError("exactly three players required")
         # Any seat may become landlord; every participant must cover 2x unit loss.
         capacity = min(balance // (2 * max_multiplier) for balance in balances)
-        allowed = [stake for stake in (100, 200, 500, 1000) if stake <= min(requested) and stake <= capacity]
+        allowed = [stake for stake in STAKE_TIERS if stake <= min(requested) and stake <= capacity]
         if not allowed:
             raise ValueError("insufficient Arena Token for minimum base stake")
         return max(allowed)

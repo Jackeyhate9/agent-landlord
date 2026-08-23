@@ -14,11 +14,11 @@ dependencies = [
   "pydantic-settings>=2.10,<3",
   "cryptography>=44,<51",
   "python-multipart>=0.0.20,<1",
-  "redis>=6,<7",
-  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4"]
+redis = ["redis>=6,<7"]
 test = ["pytest>=8.4,<9", "pytest-asyncio>=1,<2", "httpx>=0.28,<1"]
 
 [tool.setuptools.packages.find]

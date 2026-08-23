@@ -1,3 +1,5 @@
+import { MAX_MULTIPLIER } from '../../../../packages/protocol/src/constants.js';
+
 import { AgentPlate, EmptyState, EventSlate, Page, PlayingCard, SocketBadge, formatAt } from '../components';
 import { useBroadcast } from '../useBroadcast';
 
@@ -12,7 +14,7 @@ export function TablePage() {
       <section className="table-header">
         <div><span>直播牌桌</span><strong>第 {table.handNo} 局</strong><small>{table.gameId}</small></div>
         <div className="match-state"><span>{table.status}</span><strong>×{table.multiplier}</strong><small>当前倍数</small></div>
-        <div className="stake-block"><span>基础筹码</span><strong>{formatAt(table.baseStake)}</strong><small>最大投入 {formatAt(Math.min(table.baseStake * 8, 4000))}</small></div>
+        <div className="stake-block"><span>基础筹码</span><strong>{formatAt(table.baseStake)}</strong><small>最大投入 {formatAt(Math.min(table.baseStake * MAX_MULTIPLIER, 4000))}</small></div>
       </section>
 
       <section className="table-field">

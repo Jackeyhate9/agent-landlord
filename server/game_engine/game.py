@@ -6,6 +6,8 @@ import random
 from dataclasses import dataclass
 from enum import Enum
 
+from ..protocol_constants import MAX_MULTIPLIER, MULTIPLIER_FACTOR
+
 from .actions import generate_plays
 from .cards import make_deck, sort_cards
 from .patterns import CardPattern, InvalidAction, classify_cards
@@ -19,10 +21,10 @@ class Phase(str, Enum):
 
 @dataclass(frozen=True)
 class GameConfig:
-    max_multiplier: int = 8
-    bomb_multiplier: int = 2
-    rocket_multiplier: int = 2
-    spring_multiplier: int = 2
+    max_multiplier: int = MAX_MULTIPLIER
+    bomb_multiplier: int = MULTIPLIER_FACTOR
+    rocket_multiplier: int = MULTIPLIER_FACTOR
+    spring_multiplier: int = MULTIPLIER_FACTOR
     base_stake: int = 500
 
     def __post_init__(self):

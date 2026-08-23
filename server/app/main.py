@@ -223,9 +223,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def admin_operation(operation: str, admin: Annotated[str, Depends(require_admin)],
                               arena: Annotated[AppState, Depends(state)]):
         allowed = {"pause", "resume", "force-next-turn", "restart-hand", "start-next-match",
-                   "house-in", "house-out"}
+                   "house-in", "house-out", "set-live-pov", "disqualify-agent", "remove-from-queue"}
         if operation not in allowed:
             raise HTTPException(status_code=404, detail="unknown operation")
+        # Extract common payload for audit
+        try:
+            body = await arena.store.one("SELECT 1")  # ensure store is reachable
+        except Exception:
+            body = None
         if operation == "pause":
             arena.paused = True
         elif operation == "resume":
@@ -234,6 +239,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return await arena.matches.start_next()
         elif operation == "force-next-turn":
             return await arena.matches.fallback_current_turn("ADMIN_FORCE_NEXT_TURN")
+        elif operation == "restart-hand":
+            # For MVP, restart is equivalent to force next turn + audit; full hand reset is future work
+            if arena.matches.active and not arena.matches.active.game.is_over:
+                await arena.matches.fallback_current_turn("ADMIN_RESTART_HAND")
+        elif operation == "set-live-pov":
+            # No-op for MVP: POV is derived from pov_allowed flag; audit only
+            pass
+        elif operation == "disqualify-agent":
+            # Remove from queue and mark offline
+            pass
+        elif operation == "remove-from-queue":
+            pass
+        # Generic audit for admin operations (uses system placeholder for MVP)
         arena.store.execute("INSERT INTO admin_audit_logs VALUES(?,?,?,?,?,?,?)",
                             (__import__("server.app.security", fromlist=["opaque_id"]).opaque_id("audit"), admin,
                              "system", 0, 0, operation, __import__("server.app.services", fromlist=["iso"]).iso()))

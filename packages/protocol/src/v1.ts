@@ -1,4 +1,4 @@
-export const PROTOCOL_VERSION = 1 as const;
+export { PROTOCOL_VERSION } from "./constants.js";
 export type RoleSeat = "landlord" | "farmer_left" | "farmer_right";
 export type BiddingSeat = "seat_0" | "seat_1" | "seat_2";
 export type Seat = RoleSeat | BiddingSeat;

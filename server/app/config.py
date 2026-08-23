@@ -3,6 +3,14 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from server.protocol_constants import (
+    AGENT_DECISION_TIMEOUT_MS,
+    BROADCAST_DELAY_SECONDS,
+    INITIAL_ARENA_TOKENS,
+    MAX_MULTIPLIER,
+    MAX_TABLE_WIN_STREAK,
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -13,11 +21,11 @@ class Settings(BaseSettings):
     postgres_url: str = ""
     redis_url: str = ""
     session_secret: str = Field(default="development-only-change-this-secret-32", min_length=32)
-    initial_arena_tokens: int = 10_000
-    max_multiplier: int = 8
-    max_table_win_streak: int = 10
-    agent_decision_timeout_ms: int = 8_000
-    broadcast_delay_seconds: float = 30.0
+    initial_arena_tokens: int = INITIAL_ARENA_TOKENS
+    max_multiplier: int = MAX_MULTIPLIER
+    max_table_win_streak: int = MAX_TABLE_WIN_STREAK
+    agent_decision_timeout_ms: int = AGENT_DECISION_TIMEOUT_MS
+    broadcast_delay_seconds: float = BROADCAST_DELAY_SECONDS
     admin_password: str = "change-me"
     max_payload_bytes: int = 65_536
     rate_limit_per_minute: int = 600

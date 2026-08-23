@@ -11,15 +11,26 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.fonts import addMapping
 
-OUT_DIR = r"D:\Documents\Codex\2026-08-22\new-chat\outputs\agent-landlord\docs"
+OUT_DIR = os.path.join(os.path.dirname(__file__))
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# ---- CJK fonts (Windows) ----
-YAHEI = r"C:\Windows\Fonts\msyh.ttc"
-SIMHEI = r"C:\Windows\Fonts\simhei.ttf"
-pdfmetrics.registerFont(TTFont("MSYH", YAHEI))
-pdfmetrics.registerFont(TTFont("MSYH-Bold", YAHEI, subfontIndex=1))
-pdfmetrics.registerFont(TTFont("SimHei", SIMHEI))
+# ---- CJK fonts (portable) ----
+def _find_font(candidates):
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
+
+YAHEI = _find_font([r"C:\Windows\Fonts\msyh.ttc", "/usr/share/fonts/msyh.ttc", "/System/Library/Fonts/PingFang.ttc"])
+SIMHEI = _find_font([r"C:\Windows\Fonts\simhei.ttf", "/usr/share/fonts/simhei.ttf"])
+# Fallback to Helvetica if CJK fonts not found (CI/Linux)
+if YAHEI and os.path.exists(YAHEI):
+    pdfmetrics.registerFont(TTFont("MSYH", YAHEI))
+    pdfmetrics.registerFont(TTFont("MSYH-Bold", YAHEI, subfontIndex=1 if YAHEI.endswith(".ttc") else 0))
+else:
+    YAHEI = None
+if SIMHEI and os.path.exists(SIMHEI):
+    pdfmetrics.registerFont(TTFont("SimHei", SIMHEI))
 addMapping("MSYH", 0, 0, "MSYH")
 addMapping("MSYH", 1, 0, "MSYH-Bold")
 addMapping("SimHei", 0, 0, "SimHei")

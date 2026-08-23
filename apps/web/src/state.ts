@@ -1,6 +1,6 @@
-import type { BroadcastEvent, BroadcastState, HallEntry, PlayedAction, QueueEntry, TableState } from './types';
+import { MAX_MULTIPLIER, MULTIPLIER_FACTOR, TABLE_EVENTS } from '../../../packages/protocol/src/constants.js';
 
-const TABLE_EVENTS = new Set(['DEAL', 'PLAY', 'PASS', 'BOMB', 'ROCKET', 'SPRING', 'WIN', 'LOSE', 'ELIMINATION', 'NEXT_CHALLENGER', 'WIN_STREAK', 'HALL_OF_FAME', 'LANDLORD']);
+import type { BroadcastEvent, BroadcastState, HallEntry, PlayedAction, QueueEntry, TableState } from './types';
 
 export type BroadcastAction =
   | { type: 'snapshot'; state: BroadcastState }
@@ -18,7 +18,7 @@ export function broadcastReducer(state: BroadcastState, action: BroadcastAction)
   if (action.type === 'hall') return { ...state, hall: action.hall, lastSequence: sequence };
 
   const event = action.event;
-  let table = TABLE_EVENTS.has(event.type) ? { ...state.table, event } : state.table;
+  let table = (TABLE_EVENTS as Set<string>).has(event.type) ? { ...state.table, event } : state.table;
   if (event.type === 'PASS' || event.type === 'PLAY') {
     const cards = Array.isArray(event.payload?.cards) ? (event.payload.cards as string[]) : [];
     const historyType = event.type as PlayedAction['type'];
@@ -27,7 +27,7 @@ export function broadcastReducer(state: BroadcastState, action: BroadcastAction)
       history: [...table.history, { id: event.event_id, actor: event.actor ?? '未知', type: historyType, cards, sequence: event.sequence }].slice(-12),
     };
   }
-  if (event.type === 'BOMB') table = { ...table, multiplier: Math.min(table.multiplier * 2, 8) };
-  if (event.type === 'ROCKET') table = { ...table, multiplier: Math.min(table.multiplier * 2, 8) };
+  if (event.type === 'BOMB') table = { ...table, multiplier: Math.min(table.multiplier * MULTIPLIER_FACTOR, MAX_MULTIPLIER) };
+  if (event.type === 'ROCKET') table = { ...table, multiplier: Math.min(table.multiplier * MULTIPLIER_FACTOR, MAX_MULTIPLIER) };
   return { ...state, table, lastSequence: sequence };
 }
