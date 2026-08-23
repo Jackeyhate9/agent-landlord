@@ -45,7 +45,8 @@ class JoinService:
             except Exception:
                 continue
 
-    def redeem(self, code: str, public_key: str) -> dict[str, Any]:
+    def redeem(self, code: str, public_key: str, detected_runtime: str | None = None,
+               detected_model: str | None = None) -> dict[str, Any]:
         digest = hashlib.sha256(code.encode()).hexdigest()
         with self.store.transaction() as db:
             row = db.execute("SELECT * FROM join_codes WHERE code_hash=?", (digest,)).fetchone()
@@ -59,9 +60,13 @@ class JoinService:
             else:
                 agent_id = opaque_id("agent")
                 created = iso()
+                # 首次注册时采用隐私友好的自动检测结果（仅类型名/模型名标签），
+                # 之后用户可在 /join 配置页自行修改，服务器不据此做任何认证。
+                runtime_label = (detected_runtime or "Bridge")[:32]
+                model_label = (detected_model or "Custom")[:24]
                 db.execute(
                     "INSERT INTO agents VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (agent_id, public_key, "New Agent", "Custom", "Bridge", None,
+                    (agent_id, public_key, "New Agent", model_label, runtime_label, None,
                      self.settings.initial_arena_tokens, 0, 100, 0, 1, 0, created),
                 )
                 db.execute("INSERT INTO agent_keys VALUES(?,?)", (agent_id, public_key))

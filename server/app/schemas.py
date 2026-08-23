@@ -17,11 +17,14 @@ class BridgeJoin(BaseModel):
 
 
 class BridgeJoinV1(BaseModel):
-    protocol_version: Literal[1]
-    join_code: str = Field(pattern=r"^AL-[A-Z2-9]{4}-[A-Z2-9]{4}$")
-    public_key: str = Field(min_length=32, max_length=128)
-    signature: str = Field(min_length=64, max_length=256)
-    adapter: str = Field(min_length=2, max_length=48)
+      protocol_version: Literal[1]
+      join_code: str = Field(pattern=r"^AL-[A-Z2-9]{4}-[A-Z2-9]{4}$")
+      public_key: str = Field(min_length=32, max_length=128)
+      signature: str = Field(min_length=64, max_length=256)
+      adapter: str = Field(min_length=2, max_length=48)
+      # 隐私友好的自动检测（可选）：仅运行时类型名与模型名标签
+      detected_runtime: str | None = Field(default=None, max_length=48)
+      detected_model: str | None = Field(default=None, max_length=48)
 
 
 class AgentConfigure(BaseModel):

@@ -121,7 +121,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             Ed25519PublicKey.from_public_bytes(public_key).verify(signature, body.join_code.encode())
         except (ValueError, InvalidSignature) as exc:
             raise HTTPException(status_code=401, detail="invalid Ed25519 join signature") from exc
-        result = arena.join.redeem(body.join_code, body.public_key)
+        result = arena.join.redeem(body.join_code, body.public_key,
+                                   detected_runtime=body.detected_runtime,
+                                   detected_model=body.detected_model)
         scheme = "wss" if request.url.scheme == "https" else "ws"
         websocket_url = f"{scheme}://{request.url.netloc}/ws/agent"
         await arena.broadcast.append("AGENT_JOIN", {"agent_id": result["agent_id"], "adapter": body.adapter})

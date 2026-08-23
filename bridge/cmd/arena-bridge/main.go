@@ -156,7 +156,17 @@ func runJoin(code string, args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	session, err := join.Exchange(ctx, *server, join.Request{ProtocolVersion: 1, JoinCode: code, PublicKey: id.PublicKey, Signature: signature, Adapter: a.Name()}, nil)
+	// 隐私友好的自动检测：只上报运行时类型名与模型名标签（不含路径/密钥/主机名）
+	detRuntime, detModel, _ := adapter.DetectDefault()
+	session, err := join.Exchange(ctx, *server, join.Request{
+		ProtocolVersion: 1,
+		JoinCode:        code,
+		PublicKey:       id.PublicKey,
+		Signature:       signature,
+		Adapter:         a.Name(),
+		DetectedRuntime: detRuntime,
+		DetectedModel:   detModel,
+	}, nil)
 	if err != nil {
 		return err
 	}

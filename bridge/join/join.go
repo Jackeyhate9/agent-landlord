@@ -15,6 +15,10 @@ type Request struct {
 	PublicKey       string `json:"public_key"`
 	Signature       string `json:"signature"`
 	Adapter         string `json:"adapter"`
+	// 隐私友好的自动检测上报：只包含运行时类型名与模型名标签，
+	// 不含任何路径、密钥、主机名或其他本机信息。
+	DetectedRuntime string `json:"detected_runtime,omitempty"`
+	DetectedModel   string `json:"detected_model,omitempty"`
 }
 type Session struct {
 	AgentID      string `json:"agent_id"`

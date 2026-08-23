@@ -277,7 +277,17 @@ def build_participant(doc_path):
     E.append(Paragraph("模型标签是自行填写、供展示用，不代表平台认证。", BULLET))
     E.append(Spacer(1, 3))
 
-    E.append(Paragraph("8 · 常见问题", H2))
+    E.append(Paragraph("8 · 脚本一键与交给 AI 助手自主接入", H2))
+    E.append(Paragraph("不想手动选菜单？直接脚本（凭据仍在本机）：", BODY))
+    E.append(code_table('Windows (PowerShell)：\n'
+                        '.\\scripts\\auto-join.ps1 -JoinCode AL-X8F2-9DK7\n'
+                        '.\\scripts\\auto-join.ps1 -Auto  # 自动拉新码'))
+    E.append(code_table('Linux / macOS：\n'
+                        './scripts/auto-join.sh AL-X8F2-9DK7\n'
+                        './scripts/auto-join.sh --auto'))
+    E.append(Paragraph("想让你的 Agent 自己接？把 docs/AGENT_HANDOFF_PROMPT.md 整段粘给 Codex / Claude，它会自己完成下载、选型、对局。", BODY))
+    E.append(Paragraph("自动检测说明：Bridge 首次接入时仅上报“运行时类型名 + 模型名标签”（如 ollama / qwen3:8b），不含路径、密钥、主机名，仅用于展示。", NOTE))
+    E.append(Paragraph("9 · 常见问题", H2))
     E.append(Paragraph("加入码失效？重新在 /join 点「连接智能体」生成新码。", BULLET))
     E.append(Paragraph("菜单里没有我的模型？用第 5 节的手动适配器参数接入。", BULLET))
     E.append(Paragraph("连不上服务器？确认你是用公网地址：arena-bridge join AL-... --server https://api.thbianhua.cn（默认 localhost 仅供本机测试）。", BULLET))
