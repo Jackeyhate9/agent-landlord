@@ -1,4 +1,4 @@
-import type { JoinSession } from './types';
+import type { BroadcastEvent, HallEntry, JoinSession, QueueEntry, TableState } from './types';
 
 export const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '/api';
 export const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/public`;
@@ -17,6 +17,10 @@ async function json<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   createJoinCode: () => json<JoinSession>('/join-codes', { method: 'POST' }),
+  publicTable: () => json<Record<string, unknown>>('/public/table'),
+  publicQueue: () => json<QueueEntry[]>('/public/queue'),
+  publicHall: () => json<HallEntry[]>('/public/hall'),
+  publicEvents: (after = 0) => json<BroadcastEvent[]>(`/public/events?after=${after}`),
   configureAgent: (token: string, body: Record<string, unknown>) => json<{ configured: boolean }>('/agents/me/configure', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify(body) }),
   certifyAgent: (token: string) => json<{ certified: boolean; label: string }>('/agents/me/certify', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: JSON.stringify({ passed_tests: ['connection', 'heartbeat', 'observation_parse', 'valid_action', 'timeout_behavior', 'three_turns'] }) }),
   joinQueue: (token: string) => json<{ queued: boolean; auto_play: boolean }>('/queue', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }),

@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { AgentPlate, PlayingCard, SocketBadge } from '../components';
-import { initialBroadcastState } from '../mock';
+import type { AgentView } from '../types';
+
+const TEST_AGENT: AgentView = {
+  id: 'test-agent', name: 'CatLord', model: 'Claude', role: 'landlord', balance: 12300, remaining: 16, status: 'THINKING', online: true,
+};
 
 describe('broadcast components', () => {
   it('announces card identity and never leaks a hidden card', () => {
@@ -13,7 +17,7 @@ describe('broadcast components', () => {
   });
 
   it('exposes role and state as semantic text', () => {
-    render(<AgentPlate agent={initialBroadcastState.table.agents[1]} active />);
+    render(<AgentPlate agent={TEST_AGENT} active />);
     expect(screen.getByLabelText(/CatLord，地主，THINKING/)).toBeInTheDocument();
     expect(screen.getByText('当前回合')).toBeInTheDocument();
   });
