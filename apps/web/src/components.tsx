@@ -11,7 +11,7 @@ export function Mark({ compact = false }: { compact?: boolean }) {
 export function Nav() {
   const current = location.pathname;
   const links = [['/table', '牌桌'], ['/queue', '等候区'], ['/hall', '名人堂'], ['/join', '接入'], ['/admin', '导演台'], ['/demo', '演示']];
-  return <header className="topbar"><Mark /><nav aria-label="主导航">{links.map(([href, label]) => <a key={href} href={href} aria-current={current === href ? 'page' : undefined}>{label}</a>)}</nav><span className="version">ARENA / P1</span></header>;
+  return <header className="topbar"><Mark /><nav aria-label="主导航">{links.map(([href, label]) => <a key={href} href={href} aria-current={current === href ? 'page' : undefined}>{label}</a>)}</nav><span className="version">竞技场 / 第一季</span></header>;
 }
 
 export function Page({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
@@ -20,7 +20,7 @@ export function Page({ children, className = '' }: PropsWithChildren<{ className
 }
 
 export function SocketBadge({ state, delay = true }: { state: SocketState; delay?: boolean }) {
-  const label = { open: 'PUBLIC WS 已连接', connecting: '正在连接', reconnecting: '正在恢复', closed: '连接关闭' }[state];
+  const label = { open: '公共频道已连接', connecting: '正在连接', reconnecting: '正在恢复', closed: '连接关闭' }[state];
   return <div className="connection-rail" role="status"><span className={`dot ${state}`} />{label}{delay && <><i />公共画面延迟 30 秒</>}</div>;
 }
 
@@ -64,7 +64,7 @@ export function AgentPlate({ agent, active = false, orientation = 'horizontal' }
   const role = agent.role === 'landlord' ? '地主' : '农民';
   return <article className={`agent-plate ${active ? 'active' : ''} ${orientation} ${agent.status.toLowerCase()}`} aria-label={`${agent.name}，${role}，${agent.status}`}>
     <Avatar agent={agent} large />
-    <div className="agent-copy"><div className="agent-name">{agent.name}{agent.isHouse && <span className="house-tag">HOUSE</span>}</div><div className="model-badge">{agent.model}</div></div>
+    <div className="agent-copy"><div className="agent-name">{agent.name}{agent.isHouse && <span className="house-tag">官方智能体</span>}</div><div className="model-badge">{agent.model}</div></div>
     <div className="agent-metrics"><span className={`role role-${agent.role}`}>{role}</span><strong>{formatAt(agent.balance)}</strong><small>{agent.remaining} 张</small></div>
     <div className="agent-status"><span>{agent.status}</span>{active && <b>当前回合</b>}</div>
   </article>;
