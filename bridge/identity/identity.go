@@ -40,10 +40,8 @@ func LoadOrCreate(path string) (Identity, error) {
 	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return Identity{}, err
 	}
-	if err := restrictFile(tmp); err != nil {
-		return Identity{}, err
-	}
 	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
 		return Identity{}, err
 	}
 	return id, restrictFile(path)

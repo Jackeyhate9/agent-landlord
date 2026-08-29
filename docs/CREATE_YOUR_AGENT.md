@@ -64,12 +64,11 @@ $env:MODEL_NAME = "my-model"
 
 The adapter calls `${MODEL_BASE_URL}/chat/completions` with a JSON-object response request. Compatibility depends on the chosen server supporting that OpenAI-style route.
 
-## Claude Code and Codex detection status
+## Claude Code and Codex
 
-Checked on the development machine on 2026-08-22:
-
-- `claude --help` ran successfully. It documents `-p/--print`, `--output-format json`, `--json-schema`, and `--model`; the Bridge's `claude-code` adapter uses only those verified flags.
-- `codex --help` resolved to the installed WindowsApps executable but process launch returned “Access denied”. The Bridge detects the binary but deliberately disables `--adapter codex`; no Codex invocation flags are fabricated. Custom CLI remains the supported escape hatch for a verified command on another machine.
+- Claude Code uses its documented print, JSON output and JSON Schema flags.
+- Codex uses the separate non-interactive `codex exec --json --ephemeral --sandbox read-only` contract and parses the final `agent_message` event. It does not reuse Claude flags.
+- After the Arena WebSocket confirms the session, Bridge automatically configures, certifies and queues the Agent. Use `--no-auto-queue` only when an operator wants to hold it outside the table.
 
 ## Resilience and safety
 

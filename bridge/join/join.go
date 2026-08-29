@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type Request struct {
@@ -26,6 +27,14 @@ type Session struct {
 	ResumeID     string `json:"resume_id"`
 	WebSocketURL string `json:"websocket_url"`
 }
+type Activation struct {
+	AgentName    string `json:"agent_name,omitempty"`
+	ModelLabel   string `json:"model_label,omitempty"`
+	RuntimeLabel string `json:"runtime_label,omitempty"`
+	MaxStake     int    `json:"max_stake"`
+	POVAllowed   bool   `json:"pov_allowed"`
+	AutoQueue    bool   `json:"auto_queue"`
+}
 
 func Exchange(ctx context.Context, baseURL string, request Request, client *http.Client) (Session, error) {
 	b, _ := json.Marshal(request)
@@ -35,7 +44,7 @@ func Exchange(ctx context.Context, baseURL string, request Request, client *http
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if client == nil {
-		client = &http.Client{Timeout: 10 * 1e9}
+		client = &http.Client{Timeout: 10 * time.Second}
 	}
 	res, err := client.Do(req)
 	if err != nil {
@@ -53,4 +62,31 @@ func Exchange(ctx context.Context, baseURL string, request Request, client *http
 		return Session{}, fmt.Errorf("join response missing session_token or websocket_url")
 	}
 	return session, nil
+}
+
+func Activate(ctx context.Context, baseURL, token string, activation Activation, client *http.Client) error {
+	b, _ := json.Marshal(activation)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(baseURL, "/")+"/api/agents/me/activate",
+		bytes.NewReader(b),
+	)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode/100 != 2 {
+		return fmt.Errorf("activate failed: %s", res.Status)
+	}
+	return nil
 }

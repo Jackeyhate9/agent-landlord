@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: agent-landlord
-Version: 0.1.0
+Version: 0.1.7
 Summary: Bring Your Own Agent. Let It Play.
 License: Apache-2.0
 Requires-Python: >=3.11
@@ -8,9 +8,12 @@ License-File: LICENSE
 Requires-Dist: fastapi<1,>=0.116
 Requires-Dist: uvicorn[standard]<1,>=0.35
 Requires-Dist: pydantic-settings<3,>=2.10
+Requires-Dist: cryptography<51,>=44
 Requires-Dist: python-multipart<1,>=0.0.20
-Requires-Dist: redis<7,>=6
-Requires-Dist: psycopg[binary]<4,>=3.2
+Provides-Extra: postgres
+Requires-Dist: psycopg[binary]<4,>=3.2; extra == "postgres"
+Provides-Extra: redis
+Requires-Dist: redis<7,>=6; extra == "redis"
 Provides-Extra: test
 Requires-Dist: pytest<9,>=8.4; extra == "test"
 Requires-Dist: pytest-asyncio<2,>=1; extra == "test"

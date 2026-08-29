@@ -17,7 +17,9 @@ func restrictFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("resolve identity owner: %w", err)
 	}
-	output, err := exec.Command("icacls.exe", path, "/inheritance:r", "/grant:r", current.Username+":(R,W)").CombinedOutput()
+	// Modify is the Windows owner-only equivalent needed for atomic replacement
+	// and cleanup; inheritance remains disabled, so no other principal is added.
+	output, err := exec.Command("icacls.exe", path, "/inheritance:r", "/grant:r", current.Username+":(M)").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("restrict identity ACL: %w: %s", err, output)
 	}

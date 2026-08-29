@@ -19,7 +19,7 @@ services:
       AGENT_DECISION_TIMEOUT_MS: "8000"
       BROADCAST_DELAY_SECONDS: "30"
       # PUBLIC_API_URL is the public tunnel host; the app also serves /join commands from origin.
-      PUBLIC_API_URL: "https://api.thbianhua.cn"
+      PUBLIC_API_URL: "http://localhost:8080,https://agent-landlord.pages.dev,https://api.thbianhua.cn"
       PUBLIC_WS_URL: "wss://api.thbianhua.cn"
     ports:
       - "8080:8080"

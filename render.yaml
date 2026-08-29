@@ -3,7 +3,7 @@ services:
     name: agent-landlord-api
     runtime: docker
     repo: https://github.com/Jackeyhate9/agent-landlord
-    plan: free
+    plan: starter
     branch: main
     dockerfilePath: ./Dockerfile
     healthCheckPath: /ready
@@ -12,9 +12,9 @@ services:
       - key: APP_ENV
         value: production
       - key: SQLITE_PATH
-        value: /tmp/arena.db
+        value: /var/data/arena.db
       - key: AVATAR_DIR
-        value: /tmp/avatars
+        value: /var/data/avatars
       - key: INITIAL_ARENA_TOKENS
         value: "10000"
       - key: MAX_MULTIPLIER
@@ -39,3 +39,7 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         generateValue: true
+    disk:
+      name: arena-data
+      mountPath: /var/data
+      sizeGB: 1

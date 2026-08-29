@@ -23,6 +23,36 @@ describe('broadcastReducer', () => {
     expect(next.table.multiplier).toBe(8);
   });
 
+  it('projects live queue enter, token and exit events', () => {
+    const entered = broadcastReducer(initialBroadcastState, {
+      type: 'event',
+      event: {
+        event_id: 'join',
+        sequence: 1,
+        type: 'QUEUE_ENTER',
+        payload: {
+          agent_id: 'agent-1',
+          agent_name: 'StreamBot',
+          model_label: 'Codex',
+          current_at: 10000,
+          pov_allowed: true,
+          online: true,
+        },
+      },
+    });
+    expect(entered.queue[0]).toMatchObject({ id: 'agent-1', name: 'StreamBot', balance: 10000 });
+    const changed = broadcastReducer(entered, {
+      type: 'event',
+      event: { event_id: 'token', sequence: 2, type: 'TOKEN_CHANGE', payload: { agent_id: 'agent-1', delta: -100 } },
+    });
+    expect(changed.queue[0].balance).toBe(9900);
+    const exited = broadcastReducer(changed, {
+      type: 'event',
+      event: { event_id: 'exit', sequence: 3, type: 'QUEUE_EXIT', payload: { agent_id: 'agent-1' } },
+    });
+    expect(exited.queue).toHaveLength(0);
+  });
+
   it('starts empty with no virtual data', () => {
     expect(initialBroadcastState.lastSequence).toBe(0);
     expect(initialBroadcastState.table.agents).toHaveLength(0);

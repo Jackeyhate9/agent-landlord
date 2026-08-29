@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"agent-landlord/bridge/protocol"
@@ -102,6 +103,25 @@ func TestOpenAICompatibleKeepsCredentialOnLocalRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.ActionID != 18 {
+		t.Fatalf("unexpected action: %#v", got)
+	}
+}
+
+func TestCodexUsesExecJSONAndParsesFinalAgentMessage(t *testing.T) {
+	a := &CodexCLI{Binary: "codex", Run: func(_ context.Context, name string, args ...string) ([]byte, []byte, error) {
+		joined := strings.Join(args, " ")
+		if name != "codex" || !strings.Contains(joined, "exec") ||
+			!strings.Contains(joined, "--json") ||
+			!strings.Contains(joined, "--sandbox read-only") {
+			t.Fatalf("unexpected codex invocation: %s %s", name, joined)
+		}
+		return []byte("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"text\":\"{\\\"action_id\\\":18}\"}}\n"), nil, nil
+	}}
+	got, err := a.Act(context.Background(), observation())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ActionID != 18 || got.TurnID != "t" {
 		t.Fatalf("unexpected action: %#v", got)
 	}
 }

@@ -3,11 +3,13 @@ import base64
 import secrets
 import time
 from collections import defaultdict, deque
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -15,11 +17,13 @@ from .config import Settings, get_settings
 from .schemas import (
     AdminLogin,
     AgentConfigure,
+    BridgeActivation,
     BridgeJoin,
     BridgeJoinV1,
     CertificationResult,
     HealthView,
     JoinCodeView,
+    JoinStatusView,
     TokenAdjustment,
 )
 from .security import require_admin, require_agent, sign_token, verify_token
@@ -44,13 +48,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     config = settings or get_settings()
     config.validate_production_secrets()
 
+    async def supervise(arena: AppState) -> None:
+        while True:
+            await asyncio.sleep(0.25)
+            if arena.paused:
+                continue
+            try:
+                if arena.matches.turn_expired():
+                    await arena.matches.fallback_current_turn()
+                elif config.auto_start_matches and arena.matches.can_start():
+                    await arena.matches.start_next()
+            except (HTTPException, ValueError):
+                # Queue contents can change between the readiness check and transition.
+                continue
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.arena = AppState(config)
-        yield
+        supervisor = asyncio.create_task(supervise(app.state.arena))
+        try:
+            yield
+        finally:
+            supervisor.cancel()
+            with suppress(asyncio.CancelledError):
+                await supervisor
 
     allowed_origins = [o.strip() for o in config.public_api_url.split(",") if o.strip()] if config.public_api_url else ["*"]
-    app = FastAPI(title="Agent Landlord API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Agent Landlord API", version="0.1.7", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
@@ -103,6 +127,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         code, expires = arena.join.create_code()
         return JoinCodeView(code=code, expires_at=expires)
 
+    @app.get("/api/join-codes/{code}", response_model=JoinStatusView)
+    def join_status(code: str, arena: Annotated[AppState, Depends(state)]) -> JoinStatusView:
+        return JoinStatusView(**arena.join.pairing_status(code))
+
     @app.post("/api/bridge/join")
     async def bridge_join(body: BridgeJoin, arena: Annotated[AppState, Depends(state)]):
         result = arena.join.redeem(body.code, body.owner_public_key)
@@ -136,11 +164,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         values = body.model_dump(mode="json")
         return arena.arena.configure(agent_id, values)
 
+    @app.post("/api/agents/me/activate")
+    async def activate(body: BridgeActivation, agent_id: Annotated[str, Depends(require_agent)],
+                       arena: Annotated[AppState, Depends(state)]):
+        already_queued = arena.store.one(
+            "SELECT agent_id FROM queue_entries WHERE agent_id=?", (agent_id,)
+        )
+        agent = arena.arena.activate(agent_id, body.model_dump(mode="json"))
+        if body.auto_queue and not already_queued:
+            await arena.broadcast.append("QUEUE_ENTER", {
+                "agent_id": agent_id,
+                "agent_name": agent.get("agent_name", "Agent"),
+                "model_label": agent.get("model_label", "Custom"),
+                "current_at": agent.get("balance", 0),
+                "pov_allowed": bool(agent.get("pov_allowed")),
+                "online": bool(agent.get("online")),
+                "is_house": bool(agent.get("is_house")),
+            })
+        return {"activated": True, "certified": True, "queued": bool(body.auto_queue)}
+
     @app.post("/api/agents/me/certify")
     def certify(body: CertificationResult, agent_id: Annotated[str, Depends(require_agent)],
                 arena: Annotated[AppState, Depends(state)]):
         arena.arena.certify(agent_id, body.passed_tests)
         return {"certified": True, "label": "AGENT CERTIFIED"}
+
+    @app.post("/api/agents/me/heartbeat")
+    def agent_heartbeat(agent_id: Annotated[str, Depends(require_agent)],
+                        arena: Annotated[AppState, Depends(state)]):
+        arena.arena.heartbeat(agent_id)
+        return {"online": True}
 
     @app.post("/api/queue")
     async def join_queue(agent_id: Annotated[str, Depends(require_agent)],
@@ -220,17 +273,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return result
 
     @app.post("/api/admin/{operation}")
-    async def admin_operation(operation: str, admin: Annotated[str, Depends(require_admin)],
+    async def admin_operation(operation: str, request: Request,
+                              admin: Annotated[str, Depends(require_admin)],
                               arena: Annotated[AppState, Depends(state)]):
         allowed = {"pause", "resume", "force-next-turn", "restart-hand", "start-next-match",
                    "house-in", "house-out", "set-live-pov", "disqualify-agent", "remove-from-queue"}
         if operation not in allowed:
             raise HTTPException(status_code=404, detail="unknown operation")
-        # Extract common payload for audit
         try:
-            body = await arena.store.one("SELECT 1")  # ensure store is reachable
+            body = await request.json()
         except Exception:
-            body = None
+            body = {}
+        agent_id = body.get("agent_id") if isinstance(body, dict) else None
         if operation == "pause":
             arena.paused = True
         elif operation == "resume":
@@ -240,22 +294,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         elif operation == "force-next-turn":
             return await arena.matches.fallback_current_turn("ADMIN_FORCE_NEXT_TURN")
         elif operation == "restart-hand":
-            # For MVP, restart is equivalent to force next turn + audit; full hand reset is future work
-            if arena.matches.active and not arena.matches.active.game.is_over:
-                await arena.matches.fallback_current_turn("ADMIN_RESTART_HAND")
+            return await arena.matches.restart_active()
         elif operation == "set-live-pov":
-            # No-op for MVP: POV is derived from pov_allowed flag; audit only
-            pass
+            if not agent_id:
+                raise HTTPException(status_code=422, detail="agent_id required")
+            arena.store.execute("UPDATE agents SET pov_allowed=0")
+            arena.store.execute("UPDATE agents SET pov_allowed=1 WHERE id=?", (agent_id,))
         elif operation == "disqualify-agent":
-            # Remove from queue and mark offline
-            pass
+            if not agent_id:
+                raise HTTPException(status_code=422, detail="agent_id required")
+            arena.arena.leave_queue(agent_id)
+            arena.store.execute("UPDATE agents SET certified=0,online=0 WHERE id=?", (agent_id,))
         elif operation == "remove-from-queue":
-            pass
-        # Generic audit for admin operations (uses system placeholder for MVP)
+            if not agent_id:
+                raise HTTPException(status_code=422, detail="agent_id required")
+            arena.arena.leave_queue(agent_id)
+        elif operation in {"house-in", "house-out"}:
+            if not agent_id:
+                raise HTTPException(status_code=422, detail="agent_id required")
+            arena.store.execute(
+                "UPDATE agents SET is_house=? WHERE id=?",
+                (int(operation == "house-in"), agent_id),
+            )
         arena.store.execute("INSERT INTO admin_audit_logs VALUES(?,?,?,?,?,?,?)",
                             (__import__("server.app.security", fromlist=["opaque_id"]).opaque_id("audit"), admin,
-                             "system", 0, 0, operation, __import__("server.app.services", fromlist=["iso"]).iso()))
-        await arena.broadcast.append(operation.replace("-", "_").upper(), {"admin": admin})
+                             agent_id or "system", 0, 0, operation,
+                             __import__("server.app.services", fromlist=["iso"]).iso()))
+        await arena.broadcast.append(
+            operation.replace("-", "_").upper(), {"admin": admin, "agent_id": agent_id}
+        )
         return {"ok": True, "paused": arena.paused}
 
     @app.post("/api/admin/sound/{sound}")
@@ -338,6 +405,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await websocket.send_json({"type": "error", "message": "unsupported envelope"})
         except WebSocketDisconnect:
             arena.store.execute("UPDATE agents SET online=0 WHERE id=?", (agent_id,))
+
+    web_root = Path(__file__).resolve().parents[2] / "apps" / "web" / "dist"
+    if web_root.is_dir():
+        resolved_web_root = web_root.resolve()
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def web_app(full_path: str):
+            candidate = (resolved_web_root / full_path).resolve()
+            if candidate.is_relative_to(resolved_web_root) and candidate.is_file():
+                return FileResponse(candidate)
+            return FileResponse(resolved_web_root / "index.html")
 
     return app
 

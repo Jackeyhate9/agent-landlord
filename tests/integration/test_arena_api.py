@@ -1,4 +1,5 @@
 import base64
+import time
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
@@ -69,6 +70,7 @@ def test_certification_gates_queue_and_public_view_hides_keys():
         joined = register(test_client)
         auth = {"Authorization": f"Bearer {joined['session_token']}"}
         assert test_client.post("/api/queue", headers=auth).status_code == 403
+        assert test_client.post("/api/agents/me/heartbeat", headers=auth).status_code == 200
         config = {"agent_name": "CatBot", "model_label": "Claude", "runtime_label": "Custom CLI",
                   "max_stake": 500, "pov_allowed": True}
         assert test_client.post("/api/agents/me/configure", headers=auth, json=config).status_code == 200
@@ -84,6 +86,7 @@ def test_public_events_obey_server_delay():
     with client(delay=60) as test_client:
         joined = register(test_client)
         auth = {"Authorization": f"Bearer {joined['session_token']}"}
+        test_client.post("/api/agents/me/heartbeat", headers=auth)
         test_client.post("/api/agents/me/configure", headers=auth, json={
             "agent_name": "Delayed", "model_label": "Rule", "runtime_label": "test",
             "max_stake": 100, "pov_allowed": True,
@@ -97,6 +100,76 @@ def test_public_events_obey_server_delay():
         assert test_client.get("/api/public/table").json()["status"] == "IDLE"
         stored = test_client.app.state.arena.store.one("SELECT * FROM game_events")
         assert stored["broadcast_at"] > stored["created_at"]
+
+
+def test_bridge_activation_pairs_browser_and_queues_without_exposing_session_token():
+    with client() as test_client:
+        created = test_client.post("/api/join-codes").json()
+        joined = test_client.post("/api/bridge/join", json={
+            "code": created["code"],
+            "owner_public_key": "ed25519:" + "p" * 48,
+        }).json()
+        status = test_client.get(f"/api/join-codes/{created['code']}").json()
+        assert status["paired"] is True
+        assert status["queued"] is False
+        assert "session_token" not in status
+
+        auth = {"Authorization": f"Bearer {joined['session_token']}"}
+        test_client.post("/api/agents/me/heartbeat", headers=auth).raise_for_status()
+        activated = test_client.post("/api/agents/me/activate", headers=auth, json={
+            "agent_name": "One Click",
+            "model_label": "Codex",
+            "runtime_label": "codex",
+            "max_stake": 200,
+            "pov_allowed": True,
+            "auto_queue": True,
+        })
+        assert activated.status_code == 200, activated.text
+        status = test_client.get(f"/api/join-codes/{created['code']}").json()
+        assert status == {
+            "paired": True,
+            "agent_id": joined["agent_id"],
+            "agent_name": "One Click",
+            "model_label": "Codex",
+            "certified": True,
+            "queued": True,
+        }
+
+
+def test_supervisor_starts_three_activated_agents_automatically():
+    settings = Settings(
+        sqlite_path=":memory:",
+        session_secret="test-secret-that-is-at-least-thirty-two",
+        broadcast_delay_seconds=0,
+        admin_password="test-admin",
+        next_match_delay_seconds=0,
+    )
+    with TestClient(create_app(settings)) as test_client:
+        for index in range(3):
+            joined = register(test_client, "ed25519:auto-" + str(index) + "-" + "x" * 40)
+            auth = {"Authorization": f"Bearer {joined['session_token']}"}
+            test_client.post("/api/agents/me/heartbeat", headers=auth).raise_for_status()
+            test_client.post("/api/agents/me/activate", headers=auth, json={
+                "agent_name": f"Auto {index}",
+                "model_label": "Rule",
+                "runtime_label": "test",
+                "max_stake": 100,
+                "auto_queue": True,
+            }).raise_for_status()
+        deadline = time.monotonic() + 2
+        while test_client.app.state.arena.matches.active is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        matches = test_client.app.state.arena.matches
+        assert matches.active is not None
+        previous_turn = matches.active.game.turn_id
+        matches.turn_started_at = 0
+        deadline = time.monotonic() + 2
+        while matches.active.game.turn_id == previous_turn and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert matches.active.game.turn_id != previous_turn
+        assert test_client.app.state.arena.store.one(
+            "SELECT * FROM game_events WHERE type='AGENT_TIMEOUT'"
+        )
 
 
 def test_admin_adjustment_is_audited_and_cannot_make_balance_negative():

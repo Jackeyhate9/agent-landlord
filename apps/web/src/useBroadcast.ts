@@ -12,8 +12,42 @@ function decodeMessage(value: unknown): BroadcastAction | null {
   if (message.kind === 'table' && message.table) return { type: 'table', table: message.table as TableState, sequence: Number(message.sequence ?? 0) };
   if (message.kind === 'queue' && message.queue) return { type: 'queue', queue: message.queue as QueueEntry[], onlineCount: Number(message.online_count ?? 0), sequence: Number(message.sequence ?? 0) };
   if (message.kind === 'hall' && message.hall) return { type: 'hall', hall: message.hall as HallEntry[], sequence: Number(message.sequence ?? 0) };
-  if (message.event_id && message.type) return { type: 'event', event: message as never };
+  if (message.event_id && message.type) {
+    const sequence = Number(message.sequence ?? 0);
+    const payload = message.payload && typeof message.payload === 'object'
+      ? message.payload as Record<string, unknown> : {};
+    if (message.type === 'TABLE_STATE') {
+      return { type: 'table', table: toTableState(payload), sequence };
+    }
+    if (message.type === 'HALL_UPDATE' && Array.isArray(payload.entries)) {
+      return {
+        type: 'hall',
+        hall: payload.entries.map((entry, index) => toHallEntry(entry as Record<string, unknown>, index)),
+        sequence,
+      };
+    }
+    return { type: 'event', event: message as never };
+  }
   return null;
+}
+
+function toHallEntry(raw: Record<string, unknown>, index: number): HallEntry {
+  return {
+    id: String(raw.agent_id ?? raw.id ?? ''),
+    rank: index + 1,
+    name: String(raw.agent_name ?? raw.name ?? 'Agent'),
+    model: String(raw.model_label ?? raw.model ?? 'Custom'),
+    hofScore: Number(raw.hof_score ?? raw.hofScore ?? 0),
+    peakAt: Number(raw.peak_at ?? raw.peakAt ?? 0),
+    currentAt: Number(raw.current_at ?? raw.currentAt ?? 0),
+    maxWinStreak: Number(raw.max_win_streak ?? raw.maxWinStreak ?? 0),
+    currentWinStreak: Number(raw.current_win_streak ?? raw.currentWinStreak ?? 0),
+    matchesPlayed: Number(raw.matches_played ?? raw.matchesPlayed ?? 0),
+    wins: Number(raw.wins ?? 0),
+    losses: Number(raw.losses ?? 0),
+    landlordWins: Number(raw.landlord_wins ?? raw.landlordWins ?? 0),
+    farmerWins: Number(raw.farmer_wins ?? raw.farmerWins ?? 0),
+  };
 }
 
 // 把后端 /api/public/table 投影转换成前端 TableState。
@@ -24,12 +58,13 @@ function toTableState(raw: Record<string, unknown>): TableState {
   const counts = (raw.remaining_card_counts && typeof raw.remaining_card_counts === 'object')
     ? raw.remaining_card_counts as Record<string, unknown>
     : {};
-  const roles = Object.keys(counts); // landlord, farmer_left, farmer_right (按座位序)
   const pov = raw.live_pov && typeof raw.live_pov === 'object'
     ? (raw.live_pov as Record<string, unknown>) : null;
   const agents: AgentView[] = players.map((p, idx) => {
     const pl = p as Record<string, unknown>;
-    const role = (roles[idx] as AgentView['role']) || 'farmer_left';
+    const rawRole = String(pl.role ?? '');
+    const role = (['landlord', 'farmer_left', 'farmer_right'].includes(rawRole)
+      ? rawRole : idx === 0 ? 'landlord' : idx === 1 ? 'farmer_left' : 'farmer_right') as AgentView['role'];
     return {
       id: String(pl.id ?? `seat-${idx}`),
       name: String(pl.agent_name ?? '智能体'),
@@ -51,7 +86,7 @@ function toTableState(raw: Record<string, unknown>): TableState {
     baseStake: Number(raw.base_stake ?? 0),
     multiplier: Number(raw.current_multiplier ?? 1),
     delaySeconds: Number(raw.delay_seconds ?? 30),
-    landlordCards: [],
+    landlordCards: Array.isArray(raw.landlord_cards_public) ? raw.landlord_cards_public as string[] : [],
     povHand: pov ? (Array.isArray(pov.hand) ? pov.hand as string[] : []) : [],
     agents,
     history: [],

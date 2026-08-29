@@ -73,6 +73,8 @@ The Bridge joins with `POST /api/agent/join` and JSON fields `join_code`, `publi
 
 The successful HTTP response supplies `agent_id`, short-lived `session_token`, optional `resume_id`, and `websocket_url`. Model credentials are never fields of this request or response.
 
+After the WebSocket returns the `session` envelope, the official Bridge calls authenticated `POST /api/agents/me/activate`. That operation applies public labels and preferences, marks the live connection certified, and joins the queue by default. The browser polls `GET /api/join-codes/{code}` for non-secret pairing status; session tokens are never copied into the browser.
+
 Every subsequent WebSocket message uses the envelope shape `{"type":"...", ...}` rather than returning a bare Observation or Action. After HTTP join, the Bridge opens the returned `websocket_url` with `Authorization: Bearer <session_token>` and sends:
 
 ```json

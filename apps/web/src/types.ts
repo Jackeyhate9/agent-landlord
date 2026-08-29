@@ -93,7 +93,15 @@ export type SocketState = 'connecting' | 'open' | 'reconnecting' | 'closed';
 
 export interface JoinSession {
   code: string;
-  expiresAt: string;
-  sessionToken?: string;
+  expires_at: string;
   bridgeCommand?: string;
+}
+
+export interface JoinStatus {
+  paired: boolean;
+  agent_id?: string;
+  agent_name?: string;
+  model_label?: string;
+  certified: boolean;
+  queued: boolean;
 }

@@ -25,11 +25,16 @@ jobs:
         env: {GOOS: "${{ matrix.goos }}", GOARCH: "${{ matrix.goarch }}", CGO_ENABLED: "0"}
       - run: cp ../${{ matrix.output }} ../${{ matrix.alias }}
         working-directory: bridge
+      - run: |
+          sha256sum ${{ matrix.output }} > ${{ matrix.output }}.sha256
+          sha256sum ${{ matrix.alias }} > ${{ matrix.alias }}.sha256
       - uses: softprops/action-gh-release@v2
-        with: {files: |
+        with:
+          files: |
             ${{ matrix.output }}
             ${{ matrix.alias }}
-          }
+            ${{ matrix.output }}.sha256
+            ${{ matrix.alias }}.sha256
   image:
     runs-on: ubuntu-latest
     steps:

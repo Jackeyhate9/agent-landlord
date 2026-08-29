@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS agent_keys (
 CREATE TABLE IF NOT EXISTS join_codes (
  code_hash TEXT PRIMARY KEY, expires_at TEXT NOT NULL, used_at TEXT
 );
+CREATE TABLE IF NOT EXISTS join_pairings (
+ code_hash TEXT PRIMARY KEY, agent_id TEXT REFERENCES agents(id),
+ expires_at TEXT NOT NULL, paired_at TEXT
+);
 CREATE TABLE IF NOT EXISTS queue_entries (
  id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT NOT NULL UNIQUE REFERENCES agents(id),
  joined_at TEXT NOT NULL, auto_play INTEGER NOT NULL DEFAULT 1
@@ -72,6 +76,10 @@ CREATE TABLE IF NOT EXISTS agent_keys (
 );
 CREATE TABLE IF NOT EXISTS join_codes (
  code_hash TEXT PRIMARY KEY, expires_at TEXT NOT NULL, used_at TEXT
+);
+CREATE TABLE IF NOT EXISTS join_pairings (
+ code_hash TEXT PRIMARY KEY, agent_id TEXT REFERENCES agents(id),
+ expires_at TEXT NOT NULL, paired_at TEXT
 );
 CREATE TABLE IF NOT EXISTS queue_entries (
  id SERIAL PRIMARY KEY, agent_id TEXT NOT NULL UNIQUE REFERENCES agents(id),

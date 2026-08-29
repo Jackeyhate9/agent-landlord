@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 600
     join_code_ttl_seconds: int = 600
     public_api_url: str = ""
+    auto_start_matches: bool = True
+    next_match_delay_seconds: float = 3.0
 
     def validate_production_secrets(self) -> None:
         if self.app_env.lower() in {"production", "prod"}:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -31,6 +32,23 @@ class MatchService:
         self.tokens = tokens
         self.broadcast = broadcast
         self.active: ActiveMatch | None = None
+        self.turn_started_at = time.monotonic()
+        self.next_match_at = 0.0
+
+    def can_start(self) -> bool:
+        return (
+            (not self.active or self.active.game.is_over)
+            and time.monotonic() >= self.next_match_at
+            and len(self.arena.queue()) >= 3
+        )
+
+    def turn_expired(self) -> bool:
+        return bool(
+            self.active
+            and not self.active.game.is_over
+            and (time.monotonic() - self.turn_started_at) * 1000
+            >= self.settings.agent_decision_timeout_ms
+        )
 
     async def start_next(self, seed: int | None = None) -> dict[str, Any]:
         if self.active and not self.active.game.is_over:
@@ -49,6 +67,7 @@ class MatchService:
         )
         game = Game(seed=seed, config=GameConfig(max_multiplier=self.settings.max_multiplier, base_stake=base_stake))
         self.active = ActiveMatch(game=game, agent_ids=agent_ids, base_stake=base_stake)
+        self.turn_started_at = time.monotonic()
         self.store.execute("INSERT INTO games VALUES(?,?,?,?,?,?,?)",
                            (game.game_id, "BIDDING", base_stake, 1, None, iso(), None))
         for seat, agent_id in enumerate(agent_ids):
@@ -76,16 +95,31 @@ class MatchService:
         pov_seat = next((index for index, agent_id in enumerate(self.active.agent_ids)
                          if (self.store.one("SELECT pov_allowed FROM agents WHERE id=?", (agent_id,)) or {}).get("pov_allowed")), 0)
         observation = game.observation(pov_seat)
+        players = []
+        for index, agent_id in enumerate(self.active.agent_ids):
+            player = self.public_agent(agent_id)
+            player["seat_index"] = index
+            if game.landlord is None:
+                player["role"] = f"seat_{index}"
+            else:
+                player["role"] = (
+                    "landlord" if index == game.landlord
+                    else "farmer_left" if index == (game.landlord + 1) % 3
+                    else "farmer_right"
+                )
+            players.append(player)
         return {
             "status": game.phase.value.upper(),
             "game_id": game.game_id,
             "current_seat": game.current_player,
-            "players": [self.public_agent(agent_id) for agent_id in self.active.agent_ids],
+            "players": players,
             "base_stake": self.active.base_stake,
             "current_multiplier": game.current_multiplier,
             "live_pov": {"seat": pov_seat, "hand": observation["hand"]},
             "remaining_card_counts": observation["remaining_card_counts"],
             "last_action": observation["last_action"],
+            "landlord_cards_public": observation["landlord_cards_public"],
+            "delay_seconds": self.settings.broadcast_delay_seconds,
         }
 
     def observation(self, agent_id: str) -> dict[str, Any]:
@@ -113,6 +147,7 @@ class MatchService:
             event = match.game.act(seat, game_id, turn_id, action_id)
         except InvalidAction as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        self.turn_started_at = time.monotonic()
         event_type = self._event_type(event)
         payload = {**event, "public_comment": public_comment, "current_multiplier": match.game.current_multiplier}
         await self.broadcast.append(event_type, payload, game_id=game_id, actor=agent_id)
@@ -163,6 +198,73 @@ class MatchService:
             balance = (self.store.one("SELECT balance FROM agents WHERE id=?", (agent_id,)) or {"balance": 0})["balance"]
             if balance <= 0:
                 await self.broadcast.append("ELIMINATION", {"agent_id": agent_id}, game_id=game.game_id)
+                continue
+            stats = self.store.one(
+                "SELECT current_win_streak FROM leaderboard_stats WHERE agent_id=?", (agent_id,)
+            ) or {"current_win_streak": 0}
+            if stats["current_win_streak"] >= self.settings.max_table_win_streak:
+                await self.broadcast.append("RETIREMENT", {"agent_id": agent_id}, game_id=game.game_id)
+                continue
+            self.store.execute(
+                "INSERT OR IGNORE INTO queue_entries(agent_id,joined_at,auto_play) VALUES(?,?,1)",
+                (agent_id, iso()),
+            )
+            agent = self.public_agent(agent_id)
+            await self.broadcast.append(
+                "QUEUE_ENTER",
+                {
+                    "agent_id": agent_id,
+                    "agent_name": agent.get("agent_name"),
+                    "model_label": agent.get("model_label"),
+                    "current_at": agent.get("balance"),
+                    "pov_allowed": bool(agent.get("pov_allowed")),
+                    "online": bool(agent.get("online")),
+                    "is_house": bool(agent.get("is_house")),
+                },
+                game_id=game.game_id,
+            )
+        self.next_match_at = time.monotonic() + self.settings.next_match_delay_seconds
+
+    async def restart_active(self, seed: int | None = None) -> dict[str, Any]:
+        match = self._active()
+        if match.game.is_over:
+            raise HTTPException(status_code=409, detail="cannot restart a finished match")
+        old_game_id = match.game.game_id
+        self.store.execute(
+            "UPDATE games SET status='ABORTED',finished_at=? WHERE id=?", (iso(), old_game_id)
+        )
+        game = Game(
+            seed=seed,
+            config=GameConfig(
+                max_multiplier=self.settings.max_multiplier,
+                base_stake=match.base_stake,
+            ),
+        )
+        self.active = ActiveMatch(game=game, agent_ids=list(match.agent_ids), base_stake=match.base_stake)
+        self.turn_started_at = time.monotonic()
+        self.store.execute(
+            "INSERT INTO games VALUES(?,?,?,?,?,?,?)",
+            (game.game_id, "BIDDING", match.base_stake, 1, None, iso(), None),
+        )
+        for seat, agent_id in enumerate(match.agent_ids):
+            self.store.execute(
+                "INSERT INTO game_players VALUES(?,?,?,0)",
+                (game.game_id, agent_id, f"seat_{seat}"),
+            )
+        await self.broadcast.append(
+            "RESTART_HAND", {"previous_game_id": old_game_id}, game_id=game.game_id
+        )
+        await self.broadcast.append(
+            "DEAL",
+            {
+                "players": [self.public_agent(agent_id) for agent_id in match.agent_ids],
+                "base_stake": match.base_stake,
+                "remaining_card_counts": [17, 17, 17],
+            },
+            game_id=game.game_id,
+        )
+        await self.broadcast.append("TABLE_STATE", self.snapshot(), game_id=game.game_id)
+        return self.snapshot()
 
     @staticmethod
     def _event_type(event: dict[str, Any]) -> str:

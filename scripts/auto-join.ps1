@@ -39,7 +39,27 @@ if (-not $Server) { $Server = "https://api.thbianhua.cn" }
 # Resolve bridge binary (prefer local build, fallback to downloads)
 $bridge = Join-Path $projRoot "bridge\arena-bridge-windows.exe"
 if (-not (Test-Path $bridge)) { $bridge = Join-Path $projRoot "apps\web\public\downloads\arena-bridge-windows.exe" }
-if (-not (Test-Path $bridge)) { $bridge = "arena-bridge" }
+if (-not (Test-Path $bridge)) {
+  $installed = Get-Command "arena-bridge" -ErrorAction SilentlyContinue
+  if ($installed) {
+    $bridge = $installed.Source
+  } else {
+    $downloadDir = Join-Path $env:LOCALAPPDATA "agent-landlord"
+    New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+    $bridge = Join-Path $downloadDir "arena-bridge-windows.exe"
+    $base = "https://github.com/Jackeyhate9/agent-landlord/releases/latest/download"
+    Write-Host "Downloading signed release asset..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri "$base/arena-bridge-windows.exe" -OutFile $bridge -UseBasicParsing
+    $checksumFile = "$bridge.sha256"
+    Invoke-WebRequest -Uri "$base/arena-bridge-windows.exe.sha256" -OutFile $checksumFile -UseBasicParsing
+    $expected = ((Get-Content -LiteralPath $checksumFile -Raw).Trim() -split "\s+")[0].ToLowerInvariant()
+    $actual = (Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) {
+      Remove-Item -LiteralPath $bridge -Force
+      throw "Bridge checksum verification failed"
+    }
+  }
+}
 
 if ($Auto -or -not $JoinCode) {
   if (-not $JoinCode) {

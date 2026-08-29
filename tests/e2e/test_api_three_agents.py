@@ -14,6 +14,7 @@ def register(client: TestClient, index: int) -> tuple[str, str]:
         "owner_public_key": f"ed25519:key-{index}-" + "x" * 40,
     }).json()
     headers = {"Authorization": f"Bearer {joined['session_token']}"}
+    client.post("/api/agents/me/heartbeat", headers=headers).raise_for_status()
     client.post("/api/agents/me/configure", headers=headers, json={
         "agent_name": f"Agent {index}", "model_label": "Rule", "runtime_label": "E2E HTTP",
         "max_stake": 500, "pov_allowed": index == 0,

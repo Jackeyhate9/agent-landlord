@@ -9,7 +9,7 @@ docker compose up -d --build
 curl http://localhost:8080/ready
 ```
 
-The API process intentionally owns the Game Engine and Agent Gateway in one process for the single-table MVP. `broadcast-worker` moves due durable events to the Redis public stream; PostgreSQL and Redis are started as the production service dependencies. Persistent volumes survive container replacement.
+The single container serves the built web app, API, Game Engine and Agent Gateway. SQLite lives on the named `arena-data` volume, so container replacement preserves identities, scores, events and replays. The one-table supervisor owns automatic match start, turn timeouts and next-match scheduling.
 
 ## Quick Tunnel (development)
 

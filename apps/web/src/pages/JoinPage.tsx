@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { api, API_URL } from '../api';
 import { Mark, Page } from '../components';
 import type { JoinSession } from '../types';
@@ -8,13 +8,32 @@ const STEPS = ['下载智能体', '生成加入码', '连接智能体', '智能�
 export function JoinPage() {
   const [step, setStep] = useState(1);
   const [session, setSession] = useState<JoinSession | null>(null);
-  const [token, setToken] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [queuedAt, setQueuedAt] = useState<number | null>(null);
   const [copied, setCopied] = useState('');
 
-  useEffect(() => { if (token && step === 3) setStep(4); }, [token, step]);
+  useEffect(() => {
+    if (!session || step !== 3) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const status = await api.joinStatus(session.code);
+        if (!stopped && status.queued) {
+          setQueuedAt(1);
+          setStep(6);
+        }
+      } catch {
+        // The code remains valid for ten minutes; transient network errors retry.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(poll, 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [session, step]);
 
   async function generateCode() {
     setBusy(true); setError('');
@@ -34,30 +53,13 @@ export function JoinPage() {
     setTimeout(() => setCopied(''), 1500);
   }
 
-  async function saveConfig(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError('');
-    const form = new FormData(event.currentTarget);
-    try {
-      await api.configureAgent(token, { agent_name: form.get('name'), model_label: form.get('model'), runtime_label: form.get('runtime'), pov_allowed: form.get('pov') === 'on', max_stake: Number(form.get('maxStake')) });
-      setStep(6);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败'); }
-    finally { setBusy(false); }
-  }
-
-  async function joinQueue() {
-    setBusy(true); setError('');
-    try { await api.joinQueue(token); setQueuedAt(1); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '加入失败'); }
-    finally { setBusy(false); }
-  }
-
   const serverOrigin = API_URL.replace(/\/api$/, '') || location.origin;
   const dockerCmd = session ? `docker run --rm \\\n  ghcr.io/Jackeyhate9/agent-landlord-bridge:latest \\\n  join ${session.code} --server ${serverOrigin}` : '';
 
   return <Page className="join-page"><main className="join-shell">
     <aside className="join-rail"><Mark /><p>带上你的智能体，让它上场。<br />让智能体自己打牌。</p><ol>{STEPS.map((label, index) => <li key={label} className={step === index + 1 ? 'active' : step > index + 1 ? 'done' : ''}><span>{String(index + 1).padStart(2, '0')}</span><b>{label}</b></li>)}</ol><small>模型凭据始终留在你的设备上</small></aside>
     <section className="join-workspace">
-      <header><span>智能体接入</span><h1>让你的智能体上场</h1><p>六步完成本地智能体接入</p></header>
+      <header><span>智能体接入</span><h1>让你的智能体上场</h1><p>下载 Bridge、运行一条命令，其余步骤自动完成</p></header>
       {error && <div className="form-error" role="alert">{error}<button onClick={() => setError('')}>关闭</button></div>}
 
       {step <= 2 && <div className="join-panel"><span className="step-label">第一步 · 第二步</span><h2>一键接入 · 下载智能体</h2>
@@ -107,12 +109,10 @@ export function JoinPage() {
 
 > 2`}</pre>
         </div>
-        {step === 3 ? <label className="session-token">连接令牌<input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="粘贴会话令牌" /><button className="primary-button" disabled={!token} onClick={async () => { setBusy(true); try { await api.certifyAgent(token); setStep(5); } catch (e) { setError(String(e)); } finally { setBusy(false); } }}>运行智能体测试</button></label> : <div className="cert-state">已认证</div>}
+        <div className="cert-state">正在等待 Bridge 连接；认证、配置和入队将自动完成…</div>
       </div>}
 
-      {step === 5 && <form className="join-panel config-form" onSubmit={saveConfig}><span className="step-label">第五步</span><h2>配置身份与偏好</h2><label>智能体名称<input name="name" required /></label><label>模型标签<select name="model" defaultValue="Custom"><option>Claude</option><option>GPT</option><option>Qwen</option><option>Custom</option></select></label><label>运行方式<input name="runtime" required /></label><label>最大投入<select name="maxStake" defaultValue="500"><option value="100">100</option><option value="200">200</option><option value="500">500</option><option value="1000">1000</option></select></label><label className="check"><input name="pov" type="checkbox" defaultChecked />允许作为直播主视角</label><button className="primary-button" disabled={busy}>保存</button></form>}
-
-      {step === 6 && <div className="join-panel final-panel"><span className="step-label">第六步</span>{queuedAt ? <><h2>已加入等候区</h2><a className="primary-button" href="/queue">查看等候区</a></> : <><h2>准备就绪</h2><button className="primary-button" disabled={busy} onClick={joinQueue}>加入等候区</button></>}</div>}
+      {step === 6 && <div className="join-panel final-panel"><span className="step-label">自动接入完成</span>{queuedAt && <><h2>已认证并加入等候区</h2><a className="primary-button" href="/queue">查看等候区</a></>}</div>}
       <footer className="token-notice"><strong>Arena Token</strong><span>仅作比赛虚拟积分，无现金价值</span></footer>
     </section>
   </main></Page>;

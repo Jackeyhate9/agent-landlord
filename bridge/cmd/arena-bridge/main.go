@@ -42,12 +42,23 @@ func runJoin(code string, args []string) error {
 	cliCommand := fs.String("cli-command", os.Getenv("CUSTOM_AGENT_COMMAND"), "Custom CLI executable and arguments")
 	ollamaURL := fs.String("ollama-url", env("OLLAMA_URL", "http://localhost:11434"), "Ollama URL")
 	model := fs.String("model", os.Getenv("MODEL_NAME"), "local model name")
+	agentName := fs.String("name", os.Getenv("AGENT_NAME"), "public agent name")
+	maxStake := fs.Int("max-stake", 100, "maximum Arena Token base stake")
+	pov := fs.Bool("pov", false, "allow this agent's hand in the delayed public POV")
+	noAutoQueue := fs.Bool("no-auto-queue", false, "connect without automatically joining the queue")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if *maxStake != 100 && *maxStake != 200 && *maxStake != 500 && *maxStake != 1000 {
+		return fmt.Errorf("--max-stake must be one of 100, 200, 500, 1000")
+	}
 	// Interactive selection if no explicit adapter and no env-driven adapter
 	adapterFlagSet := false
-	fs.Visit(func(f *flag.Flag) { if f.Name == "adapter" { adapterFlagSet = true } })
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "adapter" {
+			adapterFlagSet = true
+		}
+	})
 	envAdapter := os.Getenv("AGENT_ADAPTER")
 	if !adapterFlagSet && envAdapter != "" {
 		*kind = envAdapter
@@ -171,7 +182,41 @@ func runJoin(code string, args []string) error {
 		return err
 	}
 	fmt.Printf("Connected as %s using %s. Session credentials remain in memory only.\n", session.AgentID, a.Name())
-	runner := client.Runner{URL: session.WebSocketURL, SessionToken: session.SessionToken, ResumeID: session.ResumeID, Adapter: a, Heartbeat: 20 * time.Second}
+	activated := false
+	activate := func() error {
+		if activated {
+			return nil
+		}
+		runtimeLabel := detRuntime
+		if runtimeLabel == "" {
+			runtimeLabel = a.Name()
+		}
+		modelLabel := detModel
+		if modelLabel == "" {
+			modelLabel = *model
+		}
+		if modelLabel == "" {
+			modelLabel = a.Name()
+		}
+		err := join.Activate(ctx, *server, session.SessionToken, join.Activation{
+			AgentName:    *agentName,
+			ModelLabel:   modelLabel,
+			RuntimeLabel: runtimeLabel,
+			MaxStake:     *maxStake,
+			POVAllowed:   *pov,
+			AutoQueue:    !*noAutoQueue,
+		}, nil)
+		if err == nil {
+			activated = true
+			fmt.Println("Agent certified and ready. Queue registration is automatic.")
+		}
+		return err
+	}
+	runner := client.Runner{
+		URL: session.WebSocketURL, SessionToken: session.SessionToken,
+		ResumeID: session.ResumeID, Adapter: a, Heartbeat: 20 * time.Second,
+		OnSession: activate,
+	}
 	return runner.Run(ctx)
 }
 func makeAdapter(kind, httpURL, cliCommand, ollamaURL, model string) (adapter.Adapter, error) {
@@ -198,8 +243,7 @@ func makeAdapter(kind, httpURL, cliCommand, ollamaURL, model string) (adapter.Ad
 	case "claude-code":
 		return &adapter.ClaudeCLI{Model: model}, nil
 	case "codex":
-		// Codex uses same JSON schema as Claude Code; flags verified locally where possible, fallback to generic exec
-		return &adapter.ClaudeCLI{Binary: "codex", Model: model}, nil
+		return &adapter.CodexCLI{Binary: "codex", Model: model}, nil
 	default:
 		return nil, fmt.Errorf("unknown adapter %q", kind)
 	}

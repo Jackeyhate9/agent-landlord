@@ -42,10 +42,32 @@ class JoinService:
             digest = hashlib.sha256(code.encode()).hexdigest()
             expires = now() + timedelta(seconds=self.settings.join_code_ttl_seconds)
             try:
-                self.store.execute("INSERT INTO join_codes VALUES(?,?,NULL)", (digest, iso(expires)))
+                with self.store.transaction() as db:
+                    db.execute("INSERT INTO join_codes VALUES(?,?,NULL)", (digest, iso(expires)))
+                    db.execute("INSERT INTO join_pairings VALUES(?,NULL,?,NULL)", (digest, iso(expires)))
                 return code, iso(expires)
             except Exception:
                 continue
+
+    def pairing_status(self, code: str) -> dict[str, Any]:
+        digest = hashlib.sha256(code.encode()).hexdigest()
+        row = self.store.one(
+            "SELECT p.expires_at,p.agent_id,a.agent_name,a.model_label,a.certified,"
+            "CASE WHEN q.agent_id IS NULL THEN 0 ELSE 1 END AS queued "
+            "FROM join_pairings p LEFT JOIN agents a ON a.id=p.agent_id "
+            "LEFT JOIN queue_entries q ON q.agent_id=p.agent_id WHERE p.code_hash=?",
+            (digest,),
+        )
+        if not row or datetime.fromisoformat(row["expires_at"]) <= now():
+            raise HTTPException(status_code=404, detail="join code not found or expired")
+        return {
+            "paired": bool(row["agent_id"]),
+            "agent_id": row["agent_id"],
+            "agent_name": row["agent_name"],
+            "model_label": row["model_label"],
+            "certified": bool(row["certified"]) if row["agent_id"] else False,
+            "queued": bool(row["queued"]),
+        }
 
     def redeem(self, code: str, public_key: str, detected_runtime: str | None = None,
                detected_model: str | None = None) -> dict[str, Any]:
@@ -69,7 +91,7 @@ class JoinService:
                 db.execute(
                     "INSERT INTO agents VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (agent_id, public_key, "New Agent", model_label, runtime_label, None,
-                     self.settings.initial_arena_tokens, 0, 100, 0, 1, 0, created),
+                     self.settings.initial_arena_tokens, 0, 100, 0, 0, 0, created),
                 )
                 db.execute("INSERT INTO agent_keys VALUES(?,?)", (agent_id, public_key))
                 db.execute(
@@ -87,6 +109,10 @@ class JoinService:
                 "INSERT INTO agent_sessions VALUES(?,?,?,?,?,1)",
                 (session_id, agent_id, iso(), iso(expires), iso()),
             )
+            db.execute(
+                "UPDATE join_pairings SET agent_id=?,paired_at=? WHERE code_hash=?",
+                (agent_id, iso(), digest),
+            )
         return {
             "agent_id": agent_id,
             "session_token": sign_token(agent_id, "agent"),
@@ -96,8 +122,6 @@ class JoinService:
 
 
 class ArenaService:
-    REQUIRED_CERTS = {"connection", "heartbeat", "observation_parse", "valid_action", "timeout_behavior", "three_turns"}
-
     def __init__(self, store: Store, settings: Settings) -> None:
         self.store = store
         self.settings = settings
@@ -111,11 +135,34 @@ class ArenaService:
         return self.store.one("SELECT * FROM agents WHERE id=?", (agent_id,)) or {}
 
     def certify(self, agent_id: str, passed: list[str]) -> bool:
-        complete = self.REQUIRED_CERTS.issubset(set(passed))
-        if not complete:
-            raise HTTPException(status_code=422, detail="all six certification tests must pass")
+        del passed  # Kept in the API shape for v1 compatibility.
+        agent = self.store.one("SELECT online FROM agents WHERE id=?", (agent_id,))
+        if not agent or not agent["online"]:
+            raise HTTPException(status_code=409, detail="live agent heartbeat required")
         self.store.execute("UPDATE agents SET certified=1 WHERE id=?", (agent_id,))
         return True
+
+    def activate(self, agent_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        agent = self.store.one("SELECT * FROM agents WHERE id=?", (agent_id,))
+        if not agent:
+            raise HTTPException(status_code=404, detail="agent not found")
+        if not agent["online"]:
+            raise HTTPException(status_code=409, detail="agent session is not online")
+        configured = {
+            "agent_name": values.get("agent_name") or (
+                f"{values.get('model_label') or agent['model_label']} Agent"
+            )[:32],
+            "model_label": values.get("model_label") or agent["model_label"],
+            "runtime_label": values.get("runtime_label") or agent["runtime_label"],
+            "avatar_url": agent.get("avatar_url"),
+            "max_stake": values.get("max_stake", 100),
+            "pov_allowed": values.get("pov_allowed", False),
+        }
+        self.configure(agent_id, configured)
+        self.store.execute("UPDATE agents SET certified=1 WHERE id=?", (agent_id,))
+        if values.get("auto_queue", True):
+            self.join_queue(agent_id)
+        return self.store.one("SELECT * FROM agents WHERE id=?", (agent_id,)) or {}
 
     def join_queue(self, agent_id: str) -> None:
         agent = self.store.one("SELECT * FROM agents WHERE id=?", (agent_id,))

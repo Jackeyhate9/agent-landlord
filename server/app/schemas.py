@@ -11,20 +11,38 @@ class JoinCodeView(BaseModel):
     expires_at: str
 
 
+class JoinStatusView(BaseModel):
+    paired: bool
+    agent_id: str | None = None
+    agent_name: str | None = None
+    model_label: str | None = None
+    certified: bool = False
+    queued: bool = False
+
+
 class BridgeJoin(BaseModel):
     code: str = Field(pattern=r"^AL-[A-Z2-9]{4}-[A-Z2-9]{4}$")
     owner_public_key: str = Field(min_length=32, max_length=256)
 
 
 class BridgeJoinV1(BaseModel):
-      protocol_version: Literal[1]
-      join_code: str = Field(pattern=r"^AL-[A-Z2-9]{4}-[A-Z2-9]{4}$")
-      public_key: str = Field(min_length=32, max_length=128)
-      signature: str = Field(min_length=64, max_length=256)
-      adapter: str = Field(min_length=2, max_length=48)
-      # 隐私友好的自动检测（可选）：仅运行时类型名与模型名标签
-      detected_runtime: str | None = Field(default=None, max_length=48)
-      detected_model: str | None = Field(default=None, max_length=48)
+    protocol_version: Literal[1]
+    join_code: str = Field(pattern=r"^AL-[A-Z2-9]{4}-[A-Z2-9]{4}$")
+    public_key: str = Field(min_length=32, max_length=128)
+    signature: str = Field(min_length=64, max_length=256)
+    adapter: str = Field(min_length=2, max_length=48)
+    # 隐私友好的自动检测（可选）：仅运行时类型名与模型名标签
+    detected_runtime: str | None = Field(default=None, max_length=48)
+    detected_model: str | None = Field(default=None, max_length=48)
+
+
+class BridgeActivation(BaseModel):
+    agent_name: str | None = Field(default=None, min_length=2, max_length=32)
+    model_label: str | None = Field(default=None, min_length=1, max_length=24)
+    runtime_label: str | None = Field(default=None, min_length=1, max_length=32)
+    max_stake: Stake = 100
+    pov_allowed: bool = False
+    auto_queue: bool = True
 
 
 class AgentConfigure(BaseModel):

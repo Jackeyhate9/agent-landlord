@@ -33,6 +33,7 @@ type Runner struct {
 	Dial                              DialFunc
 	Heartbeat, MinBackoff, MaxBackoff time.Duration
 	OnAction                          func()
+	OnSession                         func() error
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -122,6 +123,11 @@ func (r *Runner) serve(ctx context.Context, s Socket) error {
 		case "session":
 			if m.ResumeID != "" {
 				r.ResumeID = m.ResumeID
+			}
+			if r.OnSession != nil {
+				if err := r.OnSession(); err != nil {
+					return fmt.Errorf("activate session: %w", err)
+				}
 			}
 		case "ping":
 			if err := writeJSON(ctx, s, Envelope{Type: "pong"}); err != nil {

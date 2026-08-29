@@ -24,10 +24,25 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-BRIDGE="$PROJ_ROOT/bridge/arena-bridge-macos"
-[[ -f "$BRIDGE" ]] || BRIDGE="$PROJ_ROOT/bridge/arena-bridge-linux"
-[[ -f "$BRIDGE" ]] || BRIDGE="$PROJ_ROOT/apps/web/public/downloads/arena-bridge-macos"
-[[ -f "$BRIDGE" ]] || BRIDGE="arena-bridge"
+case "$(uname -s)" in
+  Darwin) ASSET="arena-bridge-macos" ;;
+  Linux) ASSET="arena-bridge-linux" ;;
+  *) echo "Unsupported system; download Bridge from GitHub Releases" >&2; exit 1 ;;
+esac
+BRIDGE="$PROJ_ROOT/bridge/$ASSET"
+[[ -f "$BRIDGE" ]] || BRIDGE="$PROJ_ROOT/apps/web/public/downloads/$ASSET"
+if [[ ! -f "$BRIDGE" ]] && ! command -v arena-bridge >/dev/null 2>&1; then
+  CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/agent-landlord"
+  mkdir -p "$CACHE_DIR"
+  BRIDGE="$CACHE_DIR/$ASSET"
+  BASE="https://github.com/Jackeyhate9/agent-landlord/releases/latest/download"
+  curl -fL "$BASE/$ASSET" -o "$BRIDGE"
+  curl -fL "$BASE/$ASSET.sha256" -o "$BRIDGE.sha256"
+  (cd "$CACHE_DIR" && sha256sum -c "$ASSET.sha256")
+  chmod +x "$BRIDGE"
+elif [[ ! -f "$BRIDGE" ]]; then
+  BRIDGE="$(command -v arena-bridge)"
+fi
 
 if [[ "$AUTO" -eq 1 || -z "$JOIN_CODE" ]]; then
   if [[ -z "$JOIN_CODE" ]]; then
