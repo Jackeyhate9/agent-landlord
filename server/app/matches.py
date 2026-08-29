@@ -195,7 +195,10 @@ class MatchService:
         await self.broadcast.append("WIN", {"winner_side": side, "deltas": deltas}, game_id=game.game_id)
         await self.broadcast.append("HALL_UPDATE", {"entries": self.tokens.hall()}, game_id=game.game_id)
         for agent_id in match.agent_ids:
-            balance = (self.store.one("SELECT balance FROM agents WHERE id=?", (agent_id,)) or {"balance": 0})["balance"]
+            agent = self.public_agent(agent_id)
+            if not agent.get("online"):
+                continue
+            balance = agent.get("balance") or 0
             if balance <= 0:
                 await self.broadcast.append("ELIMINATION", {"agent_id": agent_id}, game_id=game.game_id)
                 continue
@@ -209,7 +212,6 @@ class MatchService:
                 "INSERT OR IGNORE INTO queue_entries(agent_id,joined_at,auto_play) VALUES(?,?,1)",
                 (agent_id, iso()),
             )
-            agent = self.public_agent(agent_id)
             await self.broadcast.append(
                 "QUEUE_ENTER",
                 {
