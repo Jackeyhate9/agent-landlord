@@ -304,11 +304,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if not agent_id:
                 raise HTTPException(status_code=422, detail="agent_id required")
             arena.arena.leave_queue(agent_id)
+            await arena.broadcast.append("QUEUE_EXIT", {"agent_id": agent_id})
             arena.store.execute("UPDATE agents SET certified=0,online=0 WHERE id=?", (agent_id,))
         elif operation == "remove-from-queue":
             if not agent_id:
                 raise HTTPException(status_code=422, detail="agent_id required")
             arena.arena.leave_queue(agent_id)
+            await arena.broadcast.append("QUEUE_EXIT", {"agent_id": agent_id})
         elif operation in {"house-in", "house-out"}:
             if not agent_id:
                 raise HTTPException(status_code=422, detail="agent_id required")
