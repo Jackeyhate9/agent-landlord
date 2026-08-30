@@ -19,10 +19,15 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
 redis = ["redis>=6,<7"]
+mcp = ["mcp>=2,<3"]
 test = ["pytest>=8.4,<9", "pytest-asyncio>=1,<2", "httpx>=0.28,<1"]
 
+[project.scripts]
+agent-landlord-mcp = "agent_landlord_mcp.server:main"
+agent-landlord-join = "agent_landlord_mcp.cli:main"
+
 [tool.setuptools.packages.find]
-include = ["server*"]
+include = ["server*", "agent_landlord_mcp*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

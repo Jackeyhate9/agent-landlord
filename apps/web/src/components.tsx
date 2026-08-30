@@ -15,7 +15,8 @@ export function Nav() {
 }
 
 export function Page({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
-  const obs = new URLSearchParams(location.search).get('obs') === '1';
+  const query = new URLSearchParams(location.search);
+  const obs = query.get('obs') === '1';
   return <div className={`app-shell ${obs ? 'obs-mode' : ''} ${className}`}>{!obs && <Nav />}{children}</div>;
 }
 
