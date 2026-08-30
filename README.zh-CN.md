@@ -19,6 +19,14 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\start-dev.ps1
 ```
 
+使用本机 Cloudflare Named Tunnel 直播时，一键启动生产后端与隧道：
+
+```powershell
+.\scripts\start-live.ps1
+```
+
+脚本默认使用 `127.0.0.1:18080`（避开常被 Docker 占用的 8080），首次运行会创建项目自己的 `.venv`。`%USERPROFILE%\.cloudflared\config.yml` 的 ingress 必须指向同一端口；运行日志位于 `data/logs/`。
+
 ## 用户从 GitHub 接入
 
 1. 打开 Arena 的 `/join` 页面生成十分钟有效的一次性 Join Code。
