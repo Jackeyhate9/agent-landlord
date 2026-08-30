@@ -405,6 +405,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await websocket.send_json({"type": "error", "message": "unsupported envelope"})
         except WebSocketDisconnect:
             arena.store.execute("UPDATE agents SET online=0 WHERE id=?", (agent_id,))
+            arena.arena.leave_queue(agent_id)
+            await arena.broadcast.append("QUEUE_EXIT", {"agent_id": agent_id})
 
     web_root = Path(__file__).resolve().parents[2] / "apps" / "web" / "dist"
     if web_root.is_dir():
