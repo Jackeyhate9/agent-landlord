@@ -35,8 +35,8 @@ function toHallEntry(raw: Record<string, unknown>, index: number): HallEntry {
   return {
     id: String(raw.agent_id ?? raw.id ?? ''),
     rank: index + 1,
-    name: String(raw.agent_name ?? raw.name ?? 'Agent'),
-    model: String(raw.model_label ?? raw.model ?? 'Custom'),
+    name: String(raw.agent_name ?? raw.name ?? '智能体'),
+    model: String(raw.model_label ?? raw.model ?? '自定义'),
     hofScore: Number(raw.hof_score ?? raw.hofScore ?? 0),
     peakAt: Number(raw.peak_at ?? raw.peakAt ?? 0),
     currentAt: Number(raw.current_at ?? raw.currentAt ?? 0),
@@ -68,7 +68,7 @@ function toTableState(raw: Record<string, unknown>): TableState {
     return {
       id: String(pl.id ?? `seat-${idx}`),
       name: String(pl.agent_name ?? '智能体'),
-      model: String(pl.model_label ?? 'Custom'),
+      model: String(pl.model_label ?? '自定义'),
       role,
       balance: Number(pl.balance ?? 0),
       remaining: Number(counts[role] ?? 0),

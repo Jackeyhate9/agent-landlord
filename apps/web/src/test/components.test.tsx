@@ -18,7 +18,7 @@ describe('broadcast components', () => {
 
   it('exposes role and state as semantic text', () => {
     render(<AgentPlate agent={TEST_AGENT} active />);
-    expect(screen.getByLabelText(/CatLord，地主，THINKING/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/CatLord，地主，思考中/)).toBeInTheDocument();
     expect(screen.getByText('当前回合')).toBeInTheDocument();
   });
 

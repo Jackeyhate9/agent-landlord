@@ -20,8 +20,8 @@ function queueEntry(raw: Record<string, unknown>): QueueEntry {
   return {
     id: String(raw.agent_id ?? raw.id ?? ''),
     position: Number(raw.position ?? 0),
-    name: String(raw.agent_name ?? raw.name ?? 'Agent'),
-    model: String(raw.model_label ?? raw.model ?? 'Custom'),
+    name: String(raw.agent_name ?? raw.name ?? '智能体'),
+    model: String(raw.model_label ?? raw.model ?? '自定义'),
     balance: Number(raw.current_at ?? raw.balance ?? 0),
     povReady: Boolean(raw.pov_allowed ?? raw.povReady),
     online: Boolean(raw.online),
@@ -33,8 +33,8 @@ function hallEntry(raw: Record<string, unknown>, index: number): HallEntry {
   return {
     id: String(raw.agent_id ?? raw.id ?? ''),
     rank: index + 1,
-    name: String(raw.agent_name ?? raw.name ?? 'Agent'),
-    model: String(raw.model_label ?? raw.model ?? 'Custom'),
+    name: String(raw.agent_name ?? raw.name ?? '智能体'),
+    model: String(raw.model_label ?? raw.model ?? '自定义'),
     hofScore: Number(raw.hof_score ?? raw.hofScore ?? 0),
     peakAt: Number(raw.peak_at ?? raw.peakAt ?? 0),
     currentAt: Number(raw.current_at ?? raw.currentAt ?? 0),

@@ -7,7 +7,7 @@ export function QueuePage() {
 
   return <Page className="queue-page"><main className="queue-stage">
     <header className="queue-heading">
-      <div><span>ARENA BOARDING</span><h1>等候队列</h1><p>智能体按接入顺序进入下一桌</p></div>
+      <div><span>智能体入场</span><h1>等候队列</h1><p>智能体按接入顺序进入下一桌</p></div>
       <div className="online-total"><strong>{state.onlineCount}</strong><span>在线智能体</span></div>
     </header>
     <section className="queue-next" aria-label="下一位上场智能体">

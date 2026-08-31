@@ -5,7 +5,7 @@ import type { AgentView, GameEventType, SocketState } from './types';
 export const formatAt = (value: number) => `${new Intl.NumberFormat('zh-CN').format(value)} AT`;
 
 export function Mark({ compact = false }: { compact?: boolean }) {
-  return <span className="brand-mark" aria-label="Agent Landlord"><svg viewBox="0 0 42 42" aria-hidden="true"><path d="M6 32 16 7h10l10 25h-8l-2-7H15l-2 7H6Zm11-14h7l-3-8-4 8Z"/><path d="M30 7h6v25h-6z"/></svg>{!compact && <span><b>AGENT LANDLORD</b><small>智能体斗地主竞技场</small></span>}</span>;
+  return <span className="brand-mark" aria-label="智能体斗地主"><svg viewBox="0 0 42 42" aria-hidden="true"><path d="M6 32 16 7h10l10 25h-8l-2-7H15l-2 7H6Zm11-14h7l-3-8-4 8Z"/><path d="M30 7h6v25h-6z"/></svg>{!compact && <span><b>智能体斗地主</b><small>实时竞技直播</small></span>}</span>;
 }
 
 export function Nav() {
@@ -44,7 +44,7 @@ export function PlayingCard({ card, hidden = false, small = false }: { card: str
 }
 
 const EVENT_COPY: Record<GameEventType, string> = {
-  DEAL: '发牌 / DEAL', PLAY: '出牌 / PLAY', PASS: '不出 / PASS', BOMB: '炸弹 / BOMB', ROCKET: '王炸 / ROCKET', SPRING: '春天 / SPRING', WIN: '胜利 / WIN', LOSE: '落败 / LOSE', ELIMINATION: '归零淘汰', NEXT_CHALLENGER: '下一位挑战者', WIN_STREAK: '连胜继续', HALL_OF_FAME: '进入名人堂', LANDLORD: '地主确认',
+  DEAL: '开始发牌', PLAY: '出牌', PASS: '不出', BOMB: '炸弹', ROCKET: '王炸', SPRING: '春天', WIN: '本局胜利', LOSE: '本局落败', ELIMINATION: '归零淘汰', NEXT_CHALLENGER: '下一位挑战者', WIN_STREAK: '连胜继续', HALL_OF_FAME: '进入名人堂', LANDLORD: '地主确认',
 };
 
 export function EventSlate({ type, nonce }: { type?: GameEventType; nonce?: string | number }) {
@@ -63,11 +63,12 @@ export function EventSlate({ type, nonce }: { type?: GameEventType; nonce?: stri
 
 export function AgentPlate({ agent, active = false, orientation = 'horizontal' }: { agent: AgentView; active?: boolean; orientation?: 'horizontal' | 'vertical' }) {
   const role = agent.role === 'landlord' ? '地主' : '农民';
-  return <article className={`agent-plate ${active ? 'active' : ''} ${orientation} ${agent.status.toLowerCase()}`} aria-label={`${agent.name}，${role}，${agent.status}`}>
+  const status = { READY: '准备就绪', THINKING: '思考中', PLAYING: '对局中', PASS: '本轮不出', TIMEOUT: '行动超时', DISCONNECTED: '连接中断', HOUSE: '官方智能体' }[agent.status];
+  return <article className={`agent-plate ${active ? 'active' : ''} ${orientation} ${agent.status.toLowerCase()}`} aria-label={`${agent.name}，${role}，${status}`}>
     <Avatar agent={agent} large />
     <div className="agent-copy"><div className="agent-name">{agent.name}{agent.isHouse && <span className="house-tag">官方智能体</span>}</div><div className="model-badge">{agent.model}</div></div>
     <div className="agent-metrics"><span className={`role role-${agent.role}`}>{role}</span><strong>{formatAt(agent.balance)}</strong><small>{agent.remaining} 张</small></div>
-    <div className="agent-status"><span>{agent.status}</span>{active && <b>当前回合</b>}</div>
+    <div className="agent-status"><span>{status}</span>{active && <b>当前回合</b>}</div>
   </article>;
 }
 

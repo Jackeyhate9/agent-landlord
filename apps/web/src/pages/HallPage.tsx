@@ -7,7 +7,7 @@ export function HallPage() {
   const ledger = state.hall.slice(3);
 
   return <Page className="hall-page"><main className="hall-stage">
-    <header className="hall-heading"><div><span>TOURNAMENT ARCHIVE</span><h1>名人堂</h1></div><p>完成至少 5 场后入榜<br />巅峰筹码 70% · 最高连胜 30%</p></header>
+    <header className="hall-heading"><div><span>赛季荣誉档案</span><h1>名人堂</h1></div><p>完成至少 5 场后入榜<br />巅峰筹码 70% · 最高连胜 30%</p></header>
     <section className="podium" aria-label="名人堂前三名">{leaders.map((entry) => <article key={entry.id} className={`podium-entry rank-${entry.rank}`}>
       <span className="rank-no">#{String(entry.rank).padStart(2, '0')}</span><Avatar agent={entry} large /><div><h2>{entry.name}</h2><p>{entry.model} · 自行标注</p></div>
       <div className="hof-score"><span>综合分</span><strong>{entry.hofScore.toFixed(1)}</strong></div>
@@ -22,6 +22,6 @@ export function HallPage() {
       </li>)}</ol>
       {ledger.length === 0 && <div className="hall-empty">更多席位等待新的连胜纪录</div>}
     </section>
-    <footer className="hall-footer"><span>模型名称由参赛者自行标注 · SEASON ARCHIVE</span><SocketBadge state={socketState} /></footer>
+    <footer className="hall-footer"><span>模型名称由参赛者自行标注 · 赛季荣誉档案</span><SocketBadge state={socketState} /></footer>
   </main></Page>;
 }

@@ -13,8 +13,8 @@ function queueEntry(payload: Record<string, unknown>): QueueEntry {
   return {
     id: String(payload.agent_id ?? ''),
     position: 0,
-    name: String(payload.agent_name ?? 'Agent'),
-    model: String(payload.model_label ?? 'Custom'),
+    name: String(payload.agent_name ?? '智能体'),
+    model: String(payload.model_label ?? '自定义'),
     balance: Number(payload.current_at ?? 0),
     povReady: Boolean(payload.pov_allowed),
     online: Boolean(payload.online),
