@@ -56,8 +56,9 @@ function Test-FrontendBuild {
   $html = Get-Content -LiteralPath $distIndex -Raw
   $assets = [regex]::Matches($html, '(?:src|href)="(/assets/[^"]+)"')
   if ($assets.Count -eq 0) { return $false }
+  $distRoot = Split-Path -Parent $distIndex
   foreach ($asset in $assets) {
-    $assetPath = Join-Path $webRoot $asset.Groups[1].Value.TrimStart('/')
+    $assetPath = Join-Path $distRoot $asset.Groups[1].Value.TrimStart('/')
     if (-not (Test-Path -LiteralPath $assetPath)) { return $false }
   }
   return $true
