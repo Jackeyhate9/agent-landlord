@@ -8,6 +8,8 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
 $logDir = Join-Path $projectRoot "data\logs"
+$webRoot = Join-Path $projectRoot "apps\web"
+$distIndex = Join-Path $webRoot "dist\index.html"
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
 function Test-Python([string]$Path, [string[]]$Arguments = @()) {
@@ -16,6 +18,49 @@ function Test-Python([string]$Path, [string[]]$Arguments = @()) {
     & $Path @Arguments --version *> $null
     return $LASTEXITCODE -eq 0
   } catch { return $false }
+}
+
+function Invoke-Checked([string]$Label, [string]$FilePath, [string[]]$Arguments = @()) {
+  & $FilePath @Arguments
+  if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE" }
+}
+
+function Test-AgentTools([string]$PythonPath) {
+  $scriptsDir = Split-Path -Parent $PythonPath
+  $mcpLauncher = Join-Path $scriptsDir "agent-landlord-mcp.exe"
+  $joinLauncher = Join-Path $scriptsDir "agent-landlord-join.exe"
+  if (-not (Test-Path -LiteralPath $mcpLauncher) -or -not (Test-Path -LiteralPath $joinLauncher)) {
+    return $false
+  }
+  try {
+    & $PythonPath -c "import mcp, agent_landlord_mcp.server, agent_landlord_mcp.cli" *> $null
+    return $LASTEXITCODE -eq 0
+  } catch { return $false }
+}
+
+function Get-LatestWriteTimeUtc([string[]]$Paths) {
+  $latest = [datetime]::MinValue
+  foreach ($path in $Paths) {
+    if (-not (Test-Path -LiteralPath $path)) { continue }
+    $item = Get-Item -LiteralPath $path
+    $files = if ($item.PSIsContainer) { Get-ChildItem -LiteralPath $path -Recurse -File } else { @($item) }
+    foreach ($file in $files) {
+      if ($file.LastWriteTimeUtc -gt $latest) { $latest = $file.LastWriteTimeUtc }
+    }
+  }
+  return $latest
+}
+
+function Test-FrontendBuild {
+  if (-not (Test-Path -LiteralPath $distIndex)) { return $false }
+  $html = Get-Content -LiteralPath $distIndex -Raw
+  $assets = [regex]::Matches($html, '(?:src|href)="(/assets/[^"]+)"')
+  if ($assets.Count -eq 0) { return $false }
+  foreach ($asset in $assets) {
+    $assetPath = Join-Path $webRoot $asset.Groups[1].Value.TrimStart('/')
+    if (-not (Test-Path -LiteralPath $assetPath)) { return $false }
+  }
+  return $true
 }
 
 if (-not (Test-Python $venvPython)) {
@@ -38,6 +83,46 @@ if (-not (Test-Python $venvPython)) {
     $venvPython = $fallbackPython
     & $venvPython -m pip install -e $projectRoot
   }
+}
+
+if (-not (Test-AgentTools $venvPython)) {
+  Write-Host "[SETUP] Installing local MCP and Agent join commands..."
+  $editableMcpTarget = $projectRoot + "[mcp]"
+  Invoke-Checked "MCP installation" $venvPython @('-m','pip','install','--disable-pip-version-check','-e',$editableMcpTarget)
+}
+
+$frontendInputs = @(
+  (Join-Path $webRoot "src"),
+  (Join-Path $webRoot "index.html"),
+  (Join-Path $webRoot "package.json"),
+  (Join-Path $webRoot "pnpm-lock.yaml"),
+  (Join-Path $webRoot "vite.config.ts"),
+  (Join-Path $webRoot "tsconfig.json"),
+  (Join-Path $webRoot "tsconfig.app.json"),
+  (Join-Path $webRoot "tsconfig.node.json"),
+  (Join-Path $projectRoot "packages\protocol")
+)
+$latestFrontendInput = Get-LatestWriteTimeUtc $frontendInputs
+$frontendBuildCurrent = Test-FrontendBuild
+if ($frontendBuildCurrent) {
+  $frontendBuildCurrent = (Get-Item -LiteralPath $distIndex).LastWriteTimeUtc -ge $latestFrontendInput
+}
+
+if (-not $frontendBuildCurrent) {
+  $node = Get-Command node -ErrorAction SilentlyContinue
+  $pnpm = Get-Command pnpm.cmd -ErrorAction SilentlyContinue
+  if (-not $pnpm) { $pnpm = Get-Command pnpm -ErrorAction SilentlyContinue }
+  if (-not $node) { throw "Node.js 20+ is required to build the live frontend" }
+  if (-not $pnpm) { throw "pnpm is required to build the live frontend" }
+  Write-Host "[SETUP] Frontend sources changed; building the current live UI..."
+  Push-Location -LiteralPath $webRoot
+  try {
+    Invoke-Checked "Frontend dependency installation" $pnpm.Source @('install','--frozen-lockfile','--prefer-offline')
+    Invoke-Checked "Frontend build" $pnpm.Source @('run','build')
+  } finally {
+    Pop-Location
+  }
+  if (-not (Test-FrontendBuild)) { throw "Frontend build completed without valid dist assets" }
 }
 
 if (-not (Test-Path -LiteralPath $TunnelConfig)) {

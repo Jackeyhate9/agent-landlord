@@ -49,10 +49,13 @@ Windows 直接双击仓库根目录的 `START_LIVE.bat`。
 脚本会：
 
 1. 检查 PowerShell 7、Python 虚拟环境、Cloudflare Tunnel 配置。
-2. 自动安装本项目（仅首次）。
-3. 启动或复用本地 FastAPI 服务。
-4. 启动或复用 Cloudflare Tunnel。
-5. 连续检查本地 `/ready` 和公网 `/ready`；任一失败会停止本次新启动的进程并指向日志。
+2. 检查并自动补齐本机 MCP、智能体接入命令（仅缺失时安装）。
+3. 检查直播前端构建；源码更新后自动安装依赖并生成最新 `dist`。
+4. 启动或复用本地 FastAPI 服务。
+5. 启动或复用 Cloudflare Tunnel。
+6. 连续检查本地 `/ready` 和公网 `/ready`；任一失败会停止本次新启动的进程并指向日志。
+
+首次运行或前端源码更新后的启动时间会稍长；后续双击会直接复用已安装命令和当前构建。
 
 脚本与控制台输出只使用 ASCII，且主动切换 UTF-8 代码页，避免 Windows 批处理乱码。日志位于 `data/logs/`。
 
